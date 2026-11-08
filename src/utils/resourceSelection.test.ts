@@ -1,5 +1,6 @@
-import {it,expect,vi} from 'vitest';
-import {replaceSelectedResource, selectionFromExplicitLoraUrl, selectionFromMetadata,verifyCivitaiSelection} from './resourceSelection';
+import {describe,it,expect,vi} from 'vitest';
+import {buildCheckpointCandidates, replaceSelectedResource, selectionFromExplicitLoraUrl, selectionFromMetadata,verifyCivitaiSelection} from './resourceSelection';
+import { getRecommendedBaseModelForLora, validateLoraCompatibility } from './baseModelMatcher';
 import { assertExplicitLoraStrengths, MISSING_LORA_STRENGTH_MSG } from './loraStrength';
 import { generationReadiness } from './generationReadiness';
 it('manual AIR metadata verification invokes a real selection helper before clearing markers',async()=>{
@@ -303,4 +304,101 @@ it('keeps an identity key only when the new selection sets it explicitly', () =>
  expect(next).not.toHaveProperty('import_source_provider');
  expect(next).not.toHaveProperty('original_air');
  expect(next).not.toHaveProperty('model_id');
+});
+
+
+// Shapes below follow the live responses: GET /api/v1/models list items (modelVersions[] without `air`),
+// the server.ts hub row built from them, GET /api/v1/model-versions/{id}, and HF GET /api/models/{id} (cardData).
+const civitaiFile=(id:number,name:string)=>({id,name,type:'Model',primary:true,downloadUrl:`https://civitai.com/api/download/models/${id}`,metadata:{format:'SafeTensor'}});
+const hubRow=(over:Record<string,any>)=>({id:'555@777',modelId:'555',versionId:'777',name:'Portrait LoRA',provider:'Civitai',_sourceProvider:'civitai',type:'LORA',category:'LoRA',baseModel:'SDXL 1.0',downloads:1200,rating:0,imageUrl:'',trainedWords:['portrait'],modelVersions:[{id:777,name:'v1.0',baseModel:'SDXL 1.0',trainedWords:['portrait'],files:[civitaiFile(777,'portrait.safetensors')]}],...over});
+const checkpointRow=(over:Record<string,any>={})=>hubRow({id:'101055@128078',modelId:'101055',versionId:'128078',name:'SDXL finetune',type:'Checkpoint',category:'Checkpoint',trainedWords:[],modelVersions:[{id:128078,name:'v1',baseModel:'SDXL 1.0',files:[civitaiFile(128078,'sdxl.safetensors')]}],...over});
+const hfCard=(base:unknown,over:Record<string,any>={})=>({id:'XLabs-AI/flux-RealismLora',_sourceProvider:'huggingface',category:'LoRA',type:'LORA',downloads:10,tags:['lora','diffusers'],cardData:{base_model:base},...over});
+
+it('stamps civitai:baseModel from the exact version of a hub row and keeps the model@version identity',()=>{
+ const stamped=selectionFromMetadata('civitai',hubRow({}),'lora');
+ expect(stamped).toMatchObject({name:'555@777',baseModel:'SDXL 1.0',baseModelSource:'civitai:baseModel',resourceVerified:true,resource_kind:'lora'});
+ const multi=hubRow({id:'555@900',versionId:'900',baseModel:'Flux.1 D',modelVersions:[{id:900,baseModel:'Flux.1 D',files:[]},{id:777,baseModel:'SDXL 1.0',files:[]}]});
+ expect(selectionFromMetadata('civitai',multi,'lora')).toMatchObject({name:'555@900',baseModel:'Flux.1 D',baseModelSource:'civitai:baseModel'});
+});
+it('stamps the base model of a GET /model-versions/{id} detail object that has no air',()=>{
+ const detail={id:777,modelId:555,name:'v1.0',baseModel:'Flux.1 D',baseModelType:'Standard',model:{name:'Portrait',type:'LORA',nsfw:false},trainedWords:[],files:[civitaiFile(777,'portrait.safetensors')]};
+ expect(selectionFromMetadata('civitai',detail,'lora')).toMatchObject({name:'555@777',baseModel:'Flux.1 D',baseModelSource:'civitai:baseModel'});
+});
+it('does not stamp or guess when the civitai version is not pinned',()=>{
+ const multiNoVersion=hubRow({versionId:undefined,modelId:undefined,id:'555',modelVersions:[{id:777,baseModel:'SDXL 1.0'},{id:778,baseModel:'Flux.1 D'}]});
+ expect(()=>selectionFromMetadata('civitai',multiNoVersion,'lora')).toThrow(/versionId/);
+ const modelLevel={id:555,name:'Portrait',type:'LORA',category:'LoRA',downloads:1,baseModel:'SDXL 1.0'};
+ const shown=selectionFromMetadata('civitai',modelLevel,'lora');
+ expect(shown.baseModel).toBe('SDXL 1.0');
+ expect(shown.baseModelSource).toBeUndefined();
+ const noBase=selectionFromMetadata('civitai',hubRow({baseModel:null,modelVersions:[{id:777,files:[]}]}),'lora');
+ expect(noBase.baseModelSource).toBeUndefined();
+});
+it('stamps huggingface:base_model only from a single cardData.base_model id',()=>{
+ expect(selectionFromMetadata('huggingface',hfCard('black-forest-labs/FLUX.1-dev'),'lora')).toMatchObject({baseModel:'black-forest-labs/FLUX.1-dev',baseModelSource:'huggingface:base_model'});
+ expect(selectionFromMetadata('huggingface',hfCard(['black-forest-labs/FLUX.1-dev']),'lora')).toMatchObject({baseModelSource:'huggingface:base_model'});
+ expect(selectionFromMetadata('huggingface',hfCard(['a/b','c/d']),'lora').baseModelSource).toBeUndefined();
+ const tagOnly=selectionFromMetadata('huggingface',hfCard(undefined,{baseModel:'FLUX.1 D',tags:['lora','base_model:black-forest-labs/FLUX.1-dev']}),'lora');
+ expect(tagOnly.baseModel).toBe('FLUX.1 D');
+ expect(tagOnly.baseModelSource).toBeUndefined();
+});
+describe('buildCheckpointCandidates',()=>{
+ const lora=()=>selectionFromMetadata('civitai',hubRow({}),'lora');
+ it('keeps only verified same-family same-provider checkpoint rows',()=>{
+  const sdxl=selectionFromMetadata('civitai',checkpointRow(),'checkpoint');
+  const flux=selectionFromMetadata('civitai',checkpointRow({id:'1@2',versionId:'2',modelId:'1',baseModel:'Flux.1 D',modelVersions:[{id:2,baseModel:'Flux.1 D',files:[]}]}),'checkpoint');
+  const unpinned=selectionFromMetadata('civitai',{id:'9',name:'Model level',type:'Checkpoint',category:'Checkpoint',downloads:1,baseModel:'SDXL 1.0'},'checkpoint');
+  const otherProvider={...sdxl,name:'x/y',provider:'huggingface',resource_source:'huggingface'};
+  expect(sdxl.resource_kind).toBe('checkpoint');
+  expect(buildCheckpointCandidates(lora(),[flux,unpinned,otherProvider,sdxl,sdxl])).toEqual([{checkpoint:'101055@128078',provider:'civitai',baseModelMetadata:'SDXL 1.0',baseModelSource:'civitai:baseModel'}]);
+ });
+ it('rejects LoRA rows, unverified rows and a LoRA without verified base-model metadata',()=>{
+  const sdxl=selectionFromMetadata('civitai',checkpointRow(),'checkpoint');
+  const loraRow=lora();
+  expect(buildCheckpointCandidates(loraRow,[loraRow])).toEqual([]);
+  expect(buildCheckpointCandidates(loraRow,[{...sdxl,baseModelSource:undefined}])).toEqual([]);
+  expect(buildCheckpointCandidates(loraRow,[{...sdxl,resourceVerified:false}])).toEqual([]);
+  expect(buildCheckpointCandidates({...loraRow,baseModelSource:undefined},[sdxl])).toEqual([]);
+  expect(buildCheckpointCandidates({...loraRow,baseModel:'my-custom-base'},[sdxl])).toEqual([]);
+  expect(buildCheckpointCandidates(loraRow,[])).toEqual([]);
+ });
+});
+describe('stored LoRA node fields reach the NodeItem matcher call',()=>{
+ const nodeFor=(selection:ReturnType<typeof selectionFromMetadata>,candidates:ReturnType<typeof buildCheckpointCandidates>)=>replaceSelectedResource({lora_name:'old',base_model_source:'civitai:baseModel',checkpoint_candidates:[{checkpoint:'stale',provider:'civitai'}],recommended_checkpoint:'stale'},{...selection,checkpointCandidates:candidates},'lora_name');
+ // NodeItem reads exactly these node.values keys when it calls the matcher.
+ const matcherView=(values:Record<string,any>)=>getRecommendedBaseModelForLora(values.base_model,values.lora_name,values.resource_source,Array.isArray(values.checkpoint_candidates)?values.checkpoint_candidates:[],values.base_model_source);
+ it('verified civitai hub LoRA + one verified checkpoint yields a recommendation',()=>{
+  const lora=selectionFromMetadata('civitai',hubRow({}),'lora');
+  const candidates=buildCheckpointCandidates(lora,[selectionFromMetadata('civitai',checkpointRow(),'checkpoint')]);
+  const values=nodeFor(lora,candidates);
+  expect(values).toMatchObject({lora_name:'555@777',base_model:'SDXL 1.0',base_model_source:'civitai:baseModel',resource_source:'civitai',checkpoint_candidates:candidates});
+  expect(values).not.toHaveProperty('recommended_checkpoint');
+  const profile=matcherView(values);
+  expect(profile.recommendation).toMatchObject({checkpoint:'101055@128078',provider:'civitai',verification:'verified'});
+  expect(profile.recommendedCheckpoint).toBe('101055@128078');
+  const compat=validateLoraCompatibility('101055@128078',values.base_model,values.lora_name,'civitai',{loraBaseModelSource:values.base_model_source,checkpointBaseModelMetadata:'SDXL 1.0',checkpointBaseModelSource:'civitai:baseModel',candidates:values.checkpoint_candidates});
+  expect(compat).toMatchObject({verification:'verified',recommendedCheckpoint:'101055@128078'});
+ });
+ it('verified HF LoRA with cardData.base_model + a same-family checkpoint yields a recommendation',()=>{
+  const lora=selectionFromMetadata('huggingface',hfCard('black-forest-labs/FLUX.1-dev'),'lora');
+  const ckpt={name:'black-forest-labs/FLUX.1-schnell',provider:'huggingface',resource_source:'huggingface',resource_kind:'checkpoint',resourceVerified:true,baseModel:'black-forest-labs/FLUX.1-dev',baseModelSource:'huggingface:base_model'};
+  const candidates=buildCheckpointCandidates(lora,[ckpt]);
+  const values=nodeFor(lora,candidates);
+  expect(values).toMatchObject({base_model:'black-forest-labs/FLUX.1-dev',base_model_source:'huggingface:base_model',resource_source:'huggingface'});
+  expect(matcherView(values).recommendation).toMatchObject({checkpoint:'black-forest-labs/FLUX.1-schnell',provider:'huggingface',verification:'verified'});
+ });
+ it('missing metadata stores no pairing fields and the matcher returns null (no button)',()=>{
+  const lora=selectionFromMetadata('civitai',{id:555,name:'Portrait',type:'LORA',category:'LoRA',downloads:1,baseModel:'SDXL 1.0'},'lora');
+  const candidates=buildCheckpointCandidates(lora,[selectionFromMetadata('civitai',checkpointRow(),'checkpoint')]);
+  expect(candidates).toEqual([]);
+  const values=nodeFor(lora,candidates);
+  for(const key of ['base_model_source','checkpoint_candidates','recommended_checkpoint'])expect(values).not.toHaveProperty(key);
+  const profile=matcherView(values);
+  expect(profile.recommendation).toBeNull();
+  expect(profile.recommendedCheckpoint).toBe('');
+  const noCandidate=nodeFor(selectionFromMetadata('civitai',hubRow({}),'lora'),[]);
+  expect(noCandidate).toMatchObject({base_model_source:'civitai:baseModel'});
+  expect(noCandidate).not.toHaveProperty('checkpoint_candidates');
+  expect(matcherView(noCandidate).recommendation).toBeNull();
+ });
 });

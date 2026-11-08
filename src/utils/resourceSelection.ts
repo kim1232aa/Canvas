@@ -1,9 +1,26 @@
+import { architectureFamilyFromMetadata, isVerifiedBaseModelSource, type CatalogCheckpointCandidate } from './baseModelMatcher';
+
 export interface ResourceSelection {
  name:string;provider?:string;civitaiId?:string;triggerWords?:string;baseModel?:string;downloadUrl?:string;resourceVerified?:boolean;resource_source?:string;resource_kind?:string;fromCatalog?:boolean;isCatalog?:boolean;
  /** Exact Sogni ui.min/ui.max copied from the matched official LoRA catalog row. */
  loraStrengthRange?:{min:number;max:number;step?:number};
  /** Explicit LoRA strengths when the user/catalog provided them; never invent 0.8. */
  modelStrength?:number;clipStrength?:number;
+  /** Provenance of `baseModel`; set only when the provider's own API returned it for an exact version/repo: 'civitai:baseModel' | 'huggingface:base_model'. */
+  baseModelSource?:string;
+  /** Verified same-family checkpoint rows from the already-loaded catalog (empty when none exist). */
+  checkpointCandidates?:CatalogCheckpointCandidate[];
+}
+
+/**
+ * Hugging Face model-card `base_model` (API `cardData.base_model`): one Hub id string, or a list of ids.
+ * A list of several ids is a merge and names no single base, so it is not verifiable here.
+ */
+export function huggingFaceBaseModelStamp(metadata:any):{baseModel:string;baseModelSource:'huggingface:base_model'}|undefined {
+ const raw=metadata?.cardData?.base_model;
+ const values=Array.isArray(raw) ? raw : [raw];
+ if(values.length!==1 || typeof values[0]!=='string' || !values[0].trim())return undefined;
+ return {baseModel:values[0].trim(),baseModelSource:'huggingface:base_model'};
 }
 
 /** Absolute HTTP(S) URL usable as an executable LoRA weight path (Hub paste / manual URL). */
@@ -107,6 +124,7 @@ export function selectionFromMetadata(provider:string,metadata:any,kind:string,r
  } else if(singleModelVersion){
    version = metadata.modelVersions[0];
  }
+ const hasConfirmedVersion=Boolean(singleModelVersion || metadata.versionId!==undefined || metadata.modelId!==undefined || metadata.model?.id!==undefined || (version?.id && String(version.id)!==String(metadata.id)));
  const sourceAir=String(version.air || metadata.air || (parseAir(String(metadata.id)) ? metadata.id : ''));
  if(sourceAir && !parseAir(sourceAir))throw new Error('metadata AIR 未被核实：无法解析完整资源标识');
  const parsedAir=parseAir(requestedAir || sourceAir);
@@ -141,7 +159,7 @@ export function selectionFromMetadata(provider:string,metadata:any,kind:string,r
  if(!allowed.includes(effectiveKind))throw new Error(`资源类型未经 metadata 核实为 ${kind}`);
  if(!effectiveKind && !isCatalog)throw new Error('metadata 未标明资源类型，不能标记为已核实');
  const id=String(metadata.id || metadata.name || '');
- const modelId=singleModelVersion ? metadata.id : (metadata.modelId ?? metadata.model?.id ?? (metadata.id && version?.id && String(metadata.id) !== String(version.id) ? metadata.id : undefined));
+ const modelId=singleModelVersion ? (metadata.modelId ?? metadata.id) : (metadata.modelId ?? metadata.model?.id ?? (metadata.id && version?.id && String(metadata.id) !== String(version.id) ? metadata.id : undefined));
  const versionId=singleModelVersion ? version.id : (version?.id && String(version.id) !== String(metadata.id) ? version.id : metadata.id);
  const name=provider==='civitai'
    ? air || (modelId && versionId ? `${modelId}@${versionId}` : '') || (isCatalog ? (version?.id && id !== String(version.id) ? `${id}@${version.id}` : id) : '')
@@ -152,7 +170,36 @@ export function selectionFromMetadata(provider:string,metadata:any,kind:string,r
  const loraStrengthRange=rawRange && typeof rawRange.min==='number' && Number.isFinite(rawRange.min) && typeof rawRange.max==='number' && Number.isFinite(rawRange.max) && rawRange.min<=rawRange.max
    ? {min:rawRange.min,max:rawRange.max,...(typeof rawRange.step==='number' && Number.isFinite(rawRange.step) && rawRange.step>0?{step:rawRange.step}:{})}
    : undefined;
- return {name,provider,civitaiId:provider==='civitai'?name:undefined,triggerWords:Array.isArray(words)?words.join(', '):String(words),baseModel:version.baseModel || metadata.baseModel,downloadUrl:file?.downloadUrl || metadata.downloadUrl,...(loraStrengthRange?{loraStrengthRange}:{}),resourceVerified:true,resource_source:provider,resource_kind:effectiveKind || kind};
+ const civitaiVersionBase=provider==='civitai' && hasConfirmedVersion && typeof version.baseModel==='string' && version.baseModel.trim() ? version.baseModel.trim() : undefined;
+ const hfStamp=provider==='huggingface' ? huggingFaceBaseModelStamp(metadata) : undefined;
+ const verifiedBaseModel=civitaiVersionBase || hfStamp?.baseModel;
+ const baseModelSource=civitaiVersionBase ? 'civitai:baseModel' : hfStamp?.baseModelSource;
+ return {name,provider,civitaiId:provider==='civitai'?name:undefined,triggerWords:Array.isArray(words)?words.join(', '):String(words),baseModel:verifiedBaseModel || version.baseModel || metadata.baseModel,...(baseModelSource?{baseModelSource}:{}),downloadUrl:file?.downloadUrl || metadata.downloadUrl,...(loraStrengthRange?{loraStrengthRange}:{}),resourceVerified:true,resource_source:provider,resource_kind:effectiveKind || kind};
+}
+/**
+ * Checkpoint rows for LoRA auto-pair. Only already-loaded catalog checkpoints qualify: provider-verified
+ * base model on both sides, same architecture family, same provider as the LoRA. Nothing is derived from names;
+ * an empty result is the honest "no verified candidate" state and keeps the pair button hidden.
+ */
+export function buildCheckpointCandidates(lora:ResourceSelection,catalog:ResourceSelection[]):CatalogCheckpointCandidate[] {
+ if(!isVerifiedBaseModelSource(lora.baseModelSource))return [];
+ const family=architectureFamilyFromMetadata(lora.baseModel);
+ if(family==='unknown')return [];
+ const loraProvider=lora.resource_source || lora.provider;
+ const seen=new Set<string>();
+ const candidates:CatalogCheckpointCandidate[]=[];
+ for(const row of catalog){
+  if(row.resource_kind!=='checkpoint' || row.resourceVerified!==true)continue;
+  if(!isVerifiedBaseModelSource(row.baseModelSource) || !row.baseModel || !row.name)continue;
+  const provider=row.resource_source || row.provider;
+  if(!provider || provider!==loraProvider)continue;
+  if(architectureFamilyFromMetadata(row.baseModel)!==family)continue;
+  const key=`${provider}\u0000${row.name}`;
+  if(seen.has(key))continue;
+  seen.add(key);
+  candidates.push({checkpoint:row.name,provider,baseModelMetadata:row.baseModel,baseModelSource:row.baseModelSource});
+ }
+ return candidates;
 }
 export function verifiedSelectionOrExplicitIntent(provider:string,metadata:any):Partial<ResourceSelection> {
  try { return selectionFromMetadata(provider,metadata,'lora'); }
@@ -178,6 +225,13 @@ export async function verifyCivitaiSelection(raw:string,kind:string):Promise<Res
  if(versionId && String(metadata.id)!==versionId)throw new Error('versionId 与版本 metadata 不一致');
  return selectionFromMetadata('civitai',metadata,kind,requestedAir?.canonical);
 }
+const STALE_BASE_MODEL_PAIRING_KEYS = [
+  'base_model_source',
+  'checkpoint_candidates',
+  'recommended_checkpoint',
+  'recommended_provider',
+  'recommended_reason',
+];
 const STALE_CIVITAI_IDENTITY_KEYS = [
   'air',
   'civitai_air',
@@ -207,6 +261,7 @@ export function replaceSelectedResource(previous:Record<string,any>,selection:Re
     'civitaiId','civitai_id','resource_source','resource_kind','resourceVerified','resource_verified',
     'download_url','downloadUrl','lora_strength_min','lora_strength_max','lora_strength_step',
     ...STALE_CIVITAI_IDENTITY_KEYS,
+    ...STALE_BASE_MODEL_PAIRING_KEYS,
   ]);
   const clean=Object.fromEntries(Object.entries(previous).filter(([key])=>!stripKeys.has(key)));
   return {...clean,[field]:selection.name,resourceVerified:false,import_unresolved_resource:true,unresolvedResource:true,import_resource_reason:'新资源未经公开 metadata 核实，请重新选择已验证资源'};
@@ -219,6 +274,8 @@ export function replaceSelectedResource(previous:Record<string,any>,selection:Re
    // Previous resource identity never survives a replacement, including Civitai → Civitai.
    // A key is written back only when the new selection carries it explicitly.
    ...STALE_CIVITAI_IDENTITY_KEYS,
+   // Pairing metadata belongs to the previous LoRA; it is written back only when the new selection carries it.
+   ...STALE_BASE_MODEL_PAIRING_KEYS,
  ]);
  const clean=Object.fromEntries(Object.entries(previous).filter(([key])=>!stripKeys.has(key)));
  const carriedIdentity = Object.fromEntries(
@@ -226,7 +283,8 @@ export function replaceSelectedResource(previous:Record<string,any>,selection:Re
      .filter((key) => selectionRecord[key] !== undefined)
      .map((key) => [key, selectionRecord[key]]),
  );
- return {...clean,...carriedIdentity,[field]:selection.name,...(selection.civitaiId ? {civitai_id:selection.civitaiId} : {}),resource_source:selection.resource_source || selection.provider,resource_kind:selection.resource_kind || (explicitWeightUrl ? 'lora' : undefined),download_url:downloadUrl,resourceVerified:true,trigger_words:selection.triggerWords || '',base_model:selection.baseModel || '',...(selection.loraStrengthRange?{lora_strength_min:selection.loraStrengthRange.min,lora_strength_max:selection.loraStrengthRange.max,...(selection.loraStrengthRange.step?{lora_strength_step:selection.loraStrengthRange.step}:{})}:{})};
+ const verifiedPairingSource=isVerifiedBaseModelSource(selection.baseModelSource) ? selection.baseModelSource : undefined;
+ return {...clean,...carriedIdentity,[field]:selection.name,...(selection.civitaiId ? {civitai_id:selection.civitaiId} : {}),resource_source:selection.resource_source || selection.provider,resource_kind:selection.resource_kind || (explicitWeightUrl ? 'lora' : undefined),download_url:downloadUrl,resourceVerified:true,trigger_words:selection.triggerWords || '',base_model:selection.baseModel || '',...(verifiedPairingSource?{base_model_source:verifiedPairingSource,...(selection.checkpointCandidates?.length?{checkpoint_candidates:selection.checkpointCandidates}:{})}:{}),...(selection.loraStrengthRange?{lora_strength_min:selection.loraStrengthRange.min,lora_strength_max:selection.loraStrengthRange.max,...(selection.loraStrengthRange.step?{lora_strength_step:selection.loraStrengthRange.step}:{})}:{})};
 }
 
 /** Build the LoRA object sent to generate: AIR in name/path → civitaiId; preserves path/downloadUrl for non-Civitai providers. */

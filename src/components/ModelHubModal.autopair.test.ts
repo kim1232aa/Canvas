@@ -4,11 +4,12 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ModelHubModal } from './ModelHubModal';
+import { replaceSelectedResource } from '../utils/resourceSelection';
 import { getRecommendedBaseModelForLora, recommendCheckpointFromVerifiedMetadata, validateModelCompatibility, type CatalogCheckpointCandidate } from '../utils/baseModelMatcher';
 
 vi.mock('../services/api', async () => {
   const actual = await vi.importActual<typeof import('../services/api')>('../services/api');
-  return { ...actual, fetchLiveModels: vi.fn(async () => ({ civitai: [], _pagination: {} })) };
+  return { ...actual, fetchLiveModels: vi.fn(async () => ({ civitai: [], _pagination: {} })), fetchHuggingFaceModelInfo: vi.fn() };
 });
 
 describe('ModelHub LoRA auto-pair button', () => {
@@ -99,5 +100,162 @@ describe('recommendCheckpointFromVerifiedMetadata', () => {
     const unverified = validateModelCompatibility('flux-dev.safetensors', undefined, 'flux-lora.safetensors');
     expect(unverified.verification).toBe('unverified');
     expect(unverified.recommendedCheckpoint).toBeUndefined();
+  });
+});
+
+
+const civitaiFile = (id: number, name: string) => ({ id, name, type: 'Model', primary: true, downloadUrl: `https://civitai.com/api/download/models/${id}`, metadata: { format: 'SafeTensor' } });
+// Hub rows exactly as server.ts maps GET /api/v1/models items: id "model@version", versionId, baseModel of modelVersions[0], full modelVersions[].
+const hubLora = (over: Record<string, unknown> = {}) => ({
+  id: '555@777', modelId: '555', versionId: '777', name: 'Portrait LoRA', provider: 'Civitai', type: 'LORA', category: 'LoRA',
+  baseModel: 'SDXL 1.0', downloads: 1200, rating: 0, imageUrl: '', trainedWords: ['portrait'],
+  modelVersions: [{ id: 777, name: 'v1.0', baseModel: 'SDXL 1.0', trainedWords: ['portrait'], files: [civitaiFile(777, 'portrait.safetensors')] }],
+  ...over,
+});
+const hubCheckpoint = (over: Record<string, unknown> = {}) => ({
+  id: '101055@128078', modelId: '101055', versionId: '128078', name: 'SDXL finetune', provider: 'Civitai', type: 'Checkpoint', category: 'Checkpoint',
+  baseModel: 'SDXL 1.0', downloads: 5000, rating: 0, imageUrl: '', trainedWords: [],
+  modelVersions: [{ id: 128078, name: 'v1', baseModel: 'SDXL 1.0', files: [civitaiFile(128078, 'sdxl.safetensors')] }],
+  ...over,
+});
+
+describe('ModelHub real-click stamping of verified base model + checkpoint candidates', () => {
+  let container: HTMLDivElement;
+  let root: ReturnType<typeof createRoot>;
+  afterEach(() => {
+    act(() => root?.unmount());
+    container?.remove();
+  });
+
+  const catalogByType = async (rows: { Checkpoint?: unknown[]; LORA?: unknown[] }) => {
+    const { fetchLiveModels } = await import('../services/api');
+    vi.mocked(fetchLiveModels).mockImplementation((async (_provider: string, _query: string, type: string) => ({
+      civitai: type === 'LORA' ? (rows.LORA || []) : (rows.Checkpoint || []),
+      _pagination: {},
+    })) as never);
+  };
+  const open = async (props: Record<string, unknown>) => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    const onSelectLoRAWithBaseModel = vi.fn();
+    await act(async () => {
+      root.render(React.createElement(ModelHubModal, { isOpen: true, onClose: vi.fn(), onSelectModel: vi.fn(), onSelectLoRAWithBaseModel, initialProvider: 'civitai', ...props } as never));
+    });
+    await act(async () => { await Promise.resolve(); });
+    return onSelectLoRAWithBaseModel;
+  };
+  const clickButton = async (match: (el: HTMLButtonElement) => boolean) => {
+    const button = Array.from(container.querySelectorAll('button')).find(match);
+    expect(button).toBeDefined();
+    await act(async () => { button?.click(); });
+    await act(async () => { await Promise.resolve(); });
+  };
+  const pairButton = (el: HTMLButtonElement) => Boolean(el.textContent?.includes('选用 LoRA 并自动配对底模'));
+  // NodeItem reads these node.values keys when it calls the matcher.
+  const nodeMatcherRecommendation = (values: Record<string, any>) => getRecommendedBaseModelForLora(
+    values.base_model, values.lora_name, values.resource_source,
+    Array.isArray(values.checkpoint_candidates) ? values.checkpoint_candidates : [], values.base_model_source,
+  ).recommendation;
+
+  it('LoRA tab opened after the checkpoint tab: click stamps civitai:baseModel + cached verified checkpoint, stored node feeds the matcher', async () => {
+    await catalogByType({ Checkpoint: [hubCheckpoint()], LORA: [hubLora()] });
+    const onSelect = await open({ initialCategory: 'checkpoint' });
+    expect(container.textContent).toContain('SDXL finetune');
+    await clickButton((el) => el.textContent?.trim() === 'LoRA');
+    expect(container.textContent).toContain('Portrait LoRA');
+    expect(container.textContent).not.toContain('SDXL finetune');
+    await clickButton(pairButton);
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    const selected = onSelect.mock.calls[0][0];
+    expect(selected).toMatchObject({
+      name: '555@777', provider: 'civitai', baseModel: 'SDXL 1.0', baseModelSource: 'civitai:baseModel',
+      checkpointCandidates: [{ checkpoint: '101055@128078', provider: 'civitai', baseModelMetadata: 'SDXL 1.0', baseModelSource: 'civitai:baseModel' }],
+    });
+    const values = replaceSelectedResource({}, selected, 'lora_name');
+    expect(values).toMatchObject({ lora_name: '555@777', base_model: 'SDXL 1.0', base_model_source: 'civitai:baseModel', resource_source: 'civitai' });
+    expect(values.checkpoint_candidates).toHaveLength(1);
+    expect(nodeMatcherRecommendation(values)).toMatchObject({ checkpoint: '101055@128078', provider: 'civitai', verification: 'verified' });
+  });
+
+  it('opened on the LoRA tab with no checkpoint loaded: candidates stay empty and the matcher returns null', async () => {
+    await catalogByType({ LORA: [hubLora()] });
+    const onSelect = await open({ initialCategory: 'lora' });
+    await clickButton(pairButton);
+    const selected = onSelect.mock.calls[0][0];
+    expect(selected).toMatchObject({ baseModel: 'SDXL 1.0', baseModelSource: 'civitai:baseModel', checkpointCandidates: [] });
+    const values = replaceSelectedResource({}, selected, 'lora_name');
+    expect(values).toMatchObject({ base_model_source: 'civitai:baseModel' });
+    expect(values).not.toHaveProperty('checkpoint_candidates');
+    expect(nodeMatcherRecommendation(values)).toBeNull();
+  });
+
+  it('a different-family or unverified checkpoint is never offered', async () => {
+    const flux = hubCheckpoint({ id: '9@10', modelId: '9', versionId: '10', baseModel: 'Flux.1 D', modelVersions: [{ id: 10, baseModel: 'Flux.1 D', files: [] }] });
+    const modelLevel = { id: '77', name: 'No version', provider: 'Civitai', type: 'Checkpoint', category: 'Checkpoint', baseModel: 'SDXL 1.0', downloads: 1 };
+    await catalogByType({ Checkpoint: [flux, modelLevel], LORA: [hubLora()] });
+    const onSelect = await open({ initialCategory: 'checkpoint' });
+    await clickButton((el) => el.textContent?.trim() === 'LoRA');
+    await clickButton(pairButton);
+    const selected = onSelect.mock.calls[0][0];
+    expect(selected.checkpointCandidates).toEqual([]);
+    expect(nodeMatcherRecommendation(replaceSelectedResource({}, selected, 'lora_name'))).toBeNull();
+  });
+
+  it('a multi-version LoRA row without a pinned versionId is not stamped', async () => {
+    const unpinned = hubLora({ versionId: undefined, modelId: undefined, id: '555', modelVersions: [{ id: 777, baseModel: 'SDXL 1.0' }, { id: 778, baseModel: 'Flux.1 D' }] });
+    await catalogByType({ Checkpoint: [hubCheckpoint()], LORA: [unpinned] });
+    const onSelect = await open({ initialCategory: 'checkpoint' });
+    await clickButton((el) => el.textContent?.trim() === 'LoRA');
+    await clickButton(pairButton);
+    const selected = onSelect.mock.calls[0][0];
+    expect(selected.baseModelSource).toBeUndefined();
+    expect(selected.checkpointCandidates).toEqual([]);
+    expect(nodeMatcherRecommendation(replaceSelectedResource({}, selected, 'lora_name'))).toBeNull();
+  });
+
+  const typeInto = async (testId: string, value: string) => {
+    const input = container.querySelector(`[data-testid="${testId}"]`) as HTMLInputElement;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    await act(async () => { setter?.call(input, value); input.dispatchEvent(new Event('input', { bubbles: true })); });
+  };
+
+  it('Hub custom ID import of a Civitai version stamps civitai:baseModel and merges cached checkpoints', async () => {
+    await catalogByType({ Checkpoint: [hubCheckpoint()], LORA: [] });
+    const original = globalThis.fetch;
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({
+      id: 777, modelId: 555, name: 'v1.0', baseModel: 'SDXL 1.0', air: 'urn:air:sdxl:lora:civitai:555@777',
+      model: { name: 'Portrait', type: 'LORA' }, trainedWords: ['portrait'], files: [civitaiFile(777, 'portrait.safetensors')],
+    }))) as never;
+    try {
+      const onSelect = await open({ initialCategory: 'checkpoint' });
+      await clickButton((el) => el.textContent?.trim() === 'LoRA');
+      await typeInto('hub-custom-id', 'urn:air:sdxl:lora:civitai:555@777');
+      await clickButton((el) => el.getAttribute('data-testid') === 'hub-custom-id-apply');
+      expect(onSelect).toHaveBeenCalledTimes(1);
+      const selected = onSelect.mock.calls[0][0];
+      expect(selected).toMatchObject({ name: 'urn:air:sdxl:lora:civitai:555@777', baseModel: 'SDXL 1.0', baseModelSource: 'civitai:baseModel' });
+      expect(selected.checkpointCandidates).toEqual([{ checkpoint: '101055@128078', provider: 'civitai', baseModelMetadata: 'SDXL 1.0', baseModelSource: 'civitai:baseModel' }]);
+    } finally { globalThis.fetch = original; }
+  });
+
+  it('Hub custom ID import of a Hugging Face LoRA stamps huggingface:base_model from cardData', async () => {
+    await catalogByType({});
+    const { fetchHuggingFaceModelInfo } = await import('../services/api');
+    vi.mocked(fetchHuggingFaceModelInfo).mockResolvedValue({
+      id: 'XLabs-AI/flux-RealismLora', pipeline_tag: 'text-to-image', tags: ['diffusers', 'lora', 'flux'],
+      cardData: { base_model: 'black-forest-labs/FLUX.1-dev' },
+    });
+    const onSelect = await open({ initialCategory: 'lora', initialProvider: 'huggingface' });
+    await typeInto('hub-custom-id', 'XLabs-AI/flux-RealismLora');
+    await clickButton((el) => el.getAttribute('data-testid') === 'hub-custom-id-apply');
+    expect(fetchHuggingFaceModelInfo).toHaveBeenCalledWith('XLabs-AI/flux-RealismLora');
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    const selected = onSelect.mock.calls[0][0];
+    expect(selected).toMatchObject({
+      name: 'XLabs-AI/flux-RealismLora', provider: 'huggingface', baseModel: 'black-forest-labs/FLUX.1-dev',
+      baseModelSource: 'huggingface:base_model', checkpointCandidates: [],
+    });
+    expect(nodeMatcherRecommendation(replaceSelectedResource({}, selected, 'lora_name'))).toBeNull();
   });
 });
