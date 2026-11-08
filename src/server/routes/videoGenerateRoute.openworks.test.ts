@@ -166,3 +166,100 @@ describe('videoGenerateRoute OpenWorks: requested tool missing from upstream /to
   });
 });
 
+
+describe('videoGenerateRoute OpenWorks: truthful input mapping (M89)', () => {
+  const PROMPT = 'a lone boat drifting on a misty lake at dawn, cinematic wide shot';
+  const NEG = 'blurry, watermark, low quality';
+  const TOOL = {
+    name: 'text2video_wan27',
+    inputs: [
+      { type: 'STRING', description: 'prompt' },
+      { type: 'STRING', description: 'target video aspect ratio: only "16:9", "4:3", "1:1", "9:16", "3:4" supported' },
+      { type: 'STRING', description: 'target video size: only "720P", "1080P" supported' },
+      { type: 'STRING', description: 'The duration of the target video ranges from "2" to "15" seconds.' },
+    ],
+  };
+
+  function run(body: Record<string, unknown>, depsPatch: Partial<VideoGenerateRouteDeps> = {}) {
+    const seen: Array<{ url: string; options: any }> = [];
+    const upstream = vi.fn(async (_meta: any, url: string, options: any) => {
+      seen.push({ url, options });
+      if (url.endsWith('/tool/list')) return new Response(JSON.stringify({ code: '0', data: { tools: [TOOL] } }), { status: 200 });
+      return new Response('{"code":"1001","message":"credits not enough"}', { status: 402 });
+    });
+    const deps = { ...createDeps(upstream), ...depsPatch };
+    return callRoute(deps, { provider: 'tensorart', model: 'text2video_wan27', prompt: PROMPT, ...body }).then((res) => ({ res, seen, deps }));
+  }
+
+  it('slots no canvas field matches stay empty — the positive prompt is never copied into them', async () => {
+    const { seen } = await run({ aspect_ratio: '16:9' });
+    const wire = JSON.parse(seen.find((s) => s.url.endsWith('/task'))!.options.body);
+    expect(wire.toolName).toBe('text2video_wan27');
+    expect(wire.inputs.slice(0, 4)).toEqual([
+      { type: 'STRING', value: PROMPT },
+      { type: 'STRING' },
+      { type: 'STRING' },
+      { type: 'STRING' },
+    ]);
+    expect(wire.inputs.filter((i: any) => i.value === PROMPT)).toHaveLength(1);
+  });
+
+  it('seed/steps/cfg/negative_prompt/loras/custom_parameters reach the wire as named inputs and the history record', async () => {
+    const loras = [{ name: '969483275569466663', strength: 0.8 }];
+    const { res, seen, deps } = await run({ seed: 42, steps: 20, cfg: 7, negative_prompt: NEG, loras, custom_parameters: { 'target video size: only "720P", "1080P" supported': '720P' } });
+    const wire = JSON.parse(seen.find((s) => s.url.endsWith('/task'))!.options.body);
+    const named = (n: string) => wire.inputs.find((i: any) => i.name === n)?.value;
+    expect(wire.inputs[2]).toEqual({ type: 'STRING', value: '720P' });
+    expect(named('seed')).toBe(42);
+    expect(named('steps')).toBe(20);
+    expect(named('cfg')).toBe(7);
+    expect(named('negative_prompt')).toBe(NEG);
+    expect(named('lora_id')).toBe('969483275569466663');
+    expect(named('lora_weight')).toBe(0.8);
+    expect(res.statusCode).toBe(402);
+    expect(res.data.actualRequest.parameters).toMatchObject({ toolName: 'text2video_wan27', seed: 42, steps: 20, cfg: 7, negative_prompt: NEG, loras });
+    expect(res.data.actualRequest.mapping.some((m: any) => m.from === 'seed' && m.sent)).toBe(true);
+    expect(deps.recordHistoryItem).not.toHaveBeenCalled();
+  });
+
+  it('on success the history item carries the real seed/steps/cfg/negative/loras instead of null', async () => {
+    const queued = new Response(JSON.stringify({ code: '0', data: { task: { id: 'task-1' } } }), { status: 200 });
+    const finished = new Response(JSON.stringify({ code: '0', data: { tasks: [{ status: 'FINISH', outputs: [{ value: 'https://cdn.invalid/v.mp4' }] }] } }), { status: 200 });
+    const upstream = vi.fn(async (_meta: any, url: string) => {
+      if (url.endsWith('/tool/list')) return new Response(JSON.stringify({ code: '0', data: { tools: [TOOL] } }), { status: 200 });
+      return url.endsWith('/task') ? queued.clone() : finished.clone();
+    });
+    const deps = { ...createDeps(upstream), sleep: async () => {} } as VideoGenerateRouteDeps;
+    const loras = [{ name: '969483275569466663', strength: 0.8 }];
+    const res = await callRoute(deps, { provider: 'tensorart', model: 'text2video_wan27', prompt: PROMPT, seed: 42, steps: 20, cfg: 7, negative_prompt: NEG, loras });
+    expect(res.statusCode).toBe(200);
+    expect(deps.recordHistoryItem).toHaveBeenCalledWith(expect.objectContaining({ seed: 42, steps: 20, cfg: 7, negativePrompt: NEG, loras, model: 'text2video_wan27' }));
+    expect(res.data.actualRequest.parameters.toolName).toBe('text2video_wan27');
+  });
+});
+
+describe('videoGenerateRoute TAMS: submit origin comes from the injected resolver', () => {
+  const body = { provider: 'tensorart', model: '834845675863700019', prompt: 'A cheerful 3D girl with long pink hair walking through a dusk city', width: 480, height: 832, fps: 16, totalFrames: 49, seed: -1, count: 1 };
+  const tamsKey = '38b4e85f-f6e2-4f3b-b2f5-8d9e7a6c5b4a';
+  const call = async (deps: VideoGenerateRouteDeps) => {
+    const res = mockRes();
+    await handleVideoGenerate(deps)({ body, headers: { 'x-tensorart-key': tamsKey }, path: '/api/video/generate' } as any, res);
+    return res;
+  };
+
+  it('POSTs /v1/jobs to the configured origin (trailing slash trimmed)', async () => {
+    const upstream = vi.fn(async () => new Response('{"code":"bad"}', { status: 400 }));
+    const res = await call({ ...createDeps(upstream), resolveTamsModelApiOrigin: () => 'https://tams.example.invalid/' });
+    expect(upstream.mock.calls[0][1]).toBe('https://tams.example.invalid/v1/jobs');
+    expect(res.data.exactEndpointCalled).toBe('https://tams.example.invalid/v1/jobs');
+  });
+
+  it('without the resolver: local 500, nothing sent, no hardcoded default origin', async () => {
+    const upstream = vi.fn(async () => new Response('unexpected', { status: 200 }));
+    const res = await call(createDeps(upstream));
+    expect(upstream).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(500);
+    expect(res.data.errorSource).toBe('local');
+    expect(res.data.error).toContain('resolveTamsModelApiOrigin');
+  });
+});

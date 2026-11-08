@@ -1,5 +1,5 @@
 import type { Request, Response as ExpressResponse } from 'express';
-import { buildTamsVideoJob, isTamsNumericModel, TENSOR_MODEL_API } from '../../schemas/tensorModelApi.ts';
+import { buildTamsVideoJob, isTamsNumericModel } from '../../schemas/tensorModelApi.ts';
 import { pickTamsBearerKey, TAMS_BEARER_REQUIRED_HINT } from '../../schemas/tensorArtCredentials.ts';
 import { buildFalVideoRequest } from '../falVideoContract.ts';
 import { falQueueOpenApiUrl, extractFalInputProperties, inlineFalItemRefs, FalSchemaMissingError, type FalSchemaFetchFailure } from '../falImageContract.ts';
@@ -9,6 +9,7 @@ import { classifyNanoGptVideoStatus, NANO_GPT_VIDEO_POLL_BUDGET_MS, NANO_GPT_VID
 import { videoCancelPlan, videoProgressLine } from '../videoJobControl.ts';
 import { canvasNodeId, clearVideoJobStatus, readVideoJobByNode, readVideoJobCredential, readVideoJobStatus, updateVideoJobStatus } from '../videoJobStatus.ts';
 import { applyCustomParameters } from '../customParameters.ts';
+import { openWorksInputSchema, buildOpenWorksRequest } from '../openWorksProvider.ts';
 import { sanitizeGenerationMetadata } from '../../utils/generationMetadata.ts';
 import { resolveAgainstBaseOrigin } from '../../engines/compatRelay.ts';
 import type { FieldKey, Provider as SchemaProvider } from '../../schemas/providerSchema.ts';
@@ -47,6 +48,8 @@ export interface VideoGenerateRouteDeps {
   };
   recordHistoryItem: (item: any) => Promise<any> | any;
   requireDurableHistoryMediaUrl: (remoteUrl: string) => Promise<any>;
+  /** TAMS API origin incl. the configured tensorartBaseUrl override (server.ts resolveTamsModelApiOrigin). Required by the TAMS numeric-model branch: absent → local 500, never a hardcoded default. */
+  resolveTamsModelApiOrigin?: () => string;
   /** Test-only clock. Production uses Date.now / the route sleeper. */
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
@@ -176,7 +179,15 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
             model,
           });
         }
-        const tamsBase = String(TENSOR_MODEL_API).replace(/\/+$/, '');
+        if (!deps.resolveTamsModelApiOrigin) {
+          return res.status(500).json({
+            error: 'server 未注入 TAMS origin resolver（VideoGenerateRouteDeps.resolveTamsModelApiOrigin）；无法确定 TAMS 提交地址，请求未发出。',
+            errorSource: 'local',
+            provider: 'tensorart',
+            model,
+          });
+        }
+        const tamsBase = String(deps.resolveTamsModelApiOrigin()).replace(/\/+$/, '');
         const submitUrl = `${tamsBase}/v1/jobs`;
         const taStart = Date.now();
         const tamsHeaders = { 'Content-Type': 'application/json; charset=UTF-8', Accept: 'application/json', Authorization: `Bearer ${tamsKey}` };
@@ -413,23 +424,27 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
         }
         const targetTool = listedTool || { name: targetToolName, inputs: [] };
         const toolInputs: any[] = Array.isArray(targetTool.inputs) ? targetTool.inputs : [];
-        const formattedInputs = !listedTool || (Array.isArray(bodyInputs) && bodyInputs.length === toolInputs.length)
-          ? bodyInputs
-          : toolInputs.map((inp: any) => {
-              const desc = String(inp?.description || '').toLowerCase();
-              const type = String(inp?.type || 'STRING').toUpperCase();
-              if (type === 'FILE') return { type: inp.type, value: image_url || '' };
-              if (type === 'ARRAY') return { type: inp.type, value: image_url ? [image_url] : [] };
-              if (desc.includes('width') && isProvided(req.body.width)) return { type: inp.type, value: Number(req.body.width) };
-              if (desc.includes('height') && isProvided(req.body.height)) return { type: inp.type, value: Number(req.body.height) };
-              if ((desc.includes('count') || desc.includes('number')) && isProvided(req.body.count)) return { type: inp.type, value: Number(req.body.count) };
-              if (desc.includes('duration') || desc.includes('seconds')) return { type: inp.type, value: String(isProvided(duration) ? duration : '') };
-              if (desc.includes('ratio') || desc.includes('aspect')) return { type: inp.type, value: String(aspect_ratio || '') };
-              if (desc.includes('size') && isProvided(req.body.size)) return { type: inp.type, value: String(req.body.size) };
-              if (desc.includes('prompt') || desc.includes('text') || desc.includes('description') || desc.includes('motion')) return { type: inp.type, value: String(prompt || '') };
-              return { type: inp.type, value: String(prompt || '') };
+        // Explicit client inputs (full override) go out verbatim. Otherwise the same Schema-driven builder as the
+        // openworks schema provider maps the canvas fields: unmatched slots stay empty and unlisted fields go as named extras.
+        const useExplicitInputs = !listedTool || (Array.isArray(bodyInputs) && bodyInputs.length === toolInputs.length);
+        let wire: { toolName: string; inputs: any[] };
+        let sentParams: Record<string, any> = {};
+        let actualRequest: Record<string, any>;
+        if (useExplicitInputs) {
+          wire = { toolName: targetTool.name, inputs: bodyInputs };
+          actualRequest = { endpoint: `${baseUrl}/task`, parameters: wire, mapping: [{ from: 'inputs', to: 'inputs', value: bodyInputs, sent: true, reason: '请求显式提供 inputs，原样发送' }] };
+        } else {
+          const built = buildOpenWorksRequest(targetTool.name, openWorksInputSchema(targetTool), req.body || {});
+          if (!built.ok) {
+            return res.status(400).json({
+              error: built.error, errorSource: 'local', provider: 'tensorart', model: targetToolName, mapping: built.mapping,
+              exactEndpointCalled: `${baseUrl}/tool/list`,
             });
-        const wire = { toolName: targetTool.name, inputs: formattedInputs };
+          }
+          wire = built.wire;
+          sentParams = built.parameters;
+          actualRequest = { endpoint: `${baseUrl}/task`, parameters: built.parameters, mapping: built.mapping, schemaFields: built.schemaFields };
+        }
         const submitUrl = `${baseUrl}/task`;
         const submitRes = await upstreamFetch(
           { provider: 'tensorart', route: req.path, model: targetTool.name, key: taKey },
@@ -448,7 +463,7 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
           return res.status(submitRes.status).json({
             error: `Tensor.Art 视频任务提交失败 [${submitRes.status}]: ${submitRaw}`,
             errorSource: 'upstream', upstreamStatus: submitRes.status, rawResponse: submitRaw,
-            toolName: targetTool.name, exactEndpointCalled: submitUrl, provider: 'tensorart',
+            toolName: targetTool.name, exactEndpointCalled: submitUrl, provider: 'tensorart', actualRequest,
           });
         }
         if (!submitData || (submitData.code !== '0' && submitData.code !== 0)) {
@@ -456,7 +471,7 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
           return res.status(502).json({
             error: `Tensor.Art 视频任务创建失败: ${submitRaw}`,
             errorSource: 'upstream', rawResponse: submitRaw,
-            toolName: targetTool.name, exactEndpointCalled: submitUrl, provider: 'tensorart',
+            toolName: targetTool.name, exactEndpointCalled: submitUrl, provider: 'tensorart', actualRequest,
           });
         }
         const taskId = submitData.data?.task?.id || submitData.data?.taskId || submitData.data?.id;
@@ -465,7 +480,7 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
           return res.status(502).json({
             error: `Tensor.Art 任务成功受理，但未返回有效 Task ID: ${submitRaw}`,
             errorSource: 'upstream', rawResponse: submitRaw,
-            toolName: targetTool.name, exactEndpointCalled: submitUrl, provider: 'tensorart',
+            toolName: targetTool.name, exactEndpointCalled: submitUrl, provider: 'tensorart', actualRequest,
           });
         }
         let videoResult = '';
@@ -542,11 +557,16 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
         const item = await recordHistoryItem({
           url: durableVideoUrl,
           prompt,
+          negativePrompt: sentParams.negative_prompt,
           provider: 'Tensor.Art (OpenWorks Video)',
           model: targetTool.name,
-          seed: null,
-          steps: null,
-          cfg: null,
+          seed: sentParams.seed ?? null,
+          steps: sentParams.steps ?? null,
+          cfg: sentParams.cfg ?? null,
+          width: sentParams.width,
+          height: sentParams.height,
+          loras: sentParams.loras,
+          requestMetadata: { actualRequest },
         });
         return res.json({
           videoUrl: durableVideoUrl,
@@ -559,6 +579,7 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
           requestedModel: model,
           exactEndpointCalled: submitUrl,
           taskId,
+          actualRequest,
           historyItem: item,
         });
       } catch (taErr: any) {

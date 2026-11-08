@@ -32,3 +32,43 @@ describe('Novita HTML declaration (config data)', () => {
     expect(d.sources.some((s: string) => s.includes('javascript-sdk'))).toBe(true);
   });
 });
+
+import express from 'express';
+import type { AddressInfo } from 'node:net';
+import { novitaRequestBody, registerSchemaProviderRoutes } from './schemaProviders';
+
+describe('Novita requestWrapper decides the POST body shape (M89)', () => {
+  it('requestWrapper null → flat fields, no request wrapper, no default response_image_type', () => {
+    const body = novitaRequestBody({ image_file: 'https://e.invalid/a.png', frames_num: 25, seed: 7 }, 'SVD-XT', null);
+    expect(body).toEqual({ image_file: 'https://e.invalid/a.png', frames_num: 25, seed: 7, model_name: 'SVD-XT' });
+    expect(body).not.toHaveProperty('request');
+    expect(JSON.stringify(body)).not.toContain('response_image_type');
+  });
+  it('requestWrapper null keeps a caller-supplied extra as-is', () => {
+    expect(novitaRequestBody({ seed: 1, extra: { webhook: { url: 'https://e.invalid/hook' } } }, 'SVD', null)).toEqual({ seed: 1, model_name: 'SVD', extra: { webhook: { url: 'https://e.invalid/hook' } } });
+  });
+  it('requestWrapper "request" (txt2img) keeps {extra, request} with the image default extra', () => {
+    expect(novitaRequestBody({ prompt: 'p', seed: 1 }, 'm.safetensors', 'request')).toEqual({ extra: { response_image_type: 'jpeg' }, request: { prompt: 'p', seed: 1, model_name: 'm.safetensors' } });
+  });
+
+  it('route: SVD-XT submit posts a flat body to /v3/async/img2video and records it as actualRequest', async () => {
+    const app = express(); app.use(express.json());
+    const calls: Array<{ url: string; body: any }> = [];
+    registerSchemaProviderRoutes(app, {
+      fetch: async (_m: any, url: string, init?: any) => { calls.push({ url, body: init?.body ? JSON.parse(init.body) : undefined }); return new Response(JSON.stringify({ task_id: 't1' }), { status: 200 }); },
+      key: () => 'k', record: (i: any) => i, durable: async (u: string) => ({ ok: true, dataUrl: u }),
+    } as any);
+    const server = app.listen(0);
+    try {
+      const port = (server.address() as AddressInfo).port;
+      const r = await fetch(`http://127.0.0.1:${port}/api/schema-provider/novita/submit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'SVD-XT', prompt: 'a lone boat on a misty lake', seed: 7, steps: 20, fps: 6, num_frames: 25, isVideo: true, custom_parameters: { image_file: 'https://e.invalid/a.png', image_file_resize_mode: 'CROP_TO_ASPECT_RATIO' } }) });
+      const j: any = await r.json();
+      expect(r.status).toBe(200);
+      const post = calls.find((c) => c.url.endsWith('/v3/async/img2video'))!;
+      expect(post.body).toMatchObject({ model_name: 'SVD-XT', image_file: 'https://e.invalid/a.png', image_file_resize_mode: 'CROP_TO_ASPECT_RATIO', seed: 7, steps: 20 });
+      expect(post.body).not.toHaveProperty('request');
+      expect(JSON.stringify(post.body)).not.toContain('response_image_type');
+      expect(j.actualRequest.parameters).toEqual(post.body);
+    } finally { server.close(); }
+  });
+});

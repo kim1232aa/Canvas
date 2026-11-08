@@ -42,6 +42,7 @@ describe('videoGenerateRoute lifecycle and client disconnect handling (grok_comp
       recordHistoryItem: vi.fn().mockResolvedValue({ id: 'hist-1' }),
       requireDurableHistoryMediaUrl: vi.fn().mockResolvedValue({ ok: true, dataUrl: 'data:video/mp4;base64,AAAA' }),
       generationContext: { getStore: () => undefined },
+      resolveTamsModelApiOrigin: () => 'https://ap-east-1.tensorart.cloud',
       ...overrides,
     };
     return { deps, recordedResults };

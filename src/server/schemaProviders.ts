@@ -682,6 +682,16 @@ export function loadProviderDeclaration(provider:string,endpointPath:string,dir=
   for(const f of files){const d=JSON.parse(nodeFs.readFileSync(nodePath.join(dir,f),'utf8'));if(d.provider===provider && d.endpointPath===endpointPath && d.inputSchema)return {...d,file:'src/config/providerDeclarations/'+f};}
   return null;
 }
+/**
+ * Novita POST body shape follows the model's declared requestWrapper: null → flat fields (+ the caller's own extra, no default extra);
+ * "request" (or no declaration) → {extra, request} with the image default extra.response_image_type.
+ */
+export function novitaRequestBody(payload:Record<string,any>,model:string,requestWrapper?:string|null):Record<string,any> {
+  const {extra,...fields}=payload;
+  const given=extra && typeof extra==='object'?extra:undefined;
+  if(requestWrapper===null)return {...fields,model_name:model,...(given?{extra:given}:{})};
+  return {extra:given ?? {response_image_type:'jpeg'},request:{...fields,model_name:model}};
+}
 /** Official Novita img2video model_name values (SVD / SVD-XT). Not present in GET /v3/model checkpoints. */
 export function novitaImg2VideoDedicatedModels(decl:any=loadProviderDeclaration('novita','/v3/async/img2video')):string[] {
   if(!decl)return [];
@@ -1625,7 +1635,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       if(img2Decl && novitaImg2VideoDedicatedModels(img2Decl).includes(model)) {
         const endpoint=schemaProviders.novita.root+'/v3/async/img2video';
         const schemaSource=(img2Decl.sources||[]).join(' ; ');
-        return {provider,model,sourceUrl:schemaSource || endpoint,endpoint,inputSchema:img2Decl.inputSchema,modelMetadata:{id:model,name:model,category:'image-to-video',type:'video',endpoint:'/v3/async/img2video'},schemaStatus:'official-html-declaration',schemaSource,declaration:{file:img2Decl.file,sources:img2Decl.sources,fetchedAt:img2Decl.fetchedAt},schemaUnprobed:true,schemaConfirmedFields:Object.entries(img2Decl.inputSchema.properties||{}).filter(([,v]:any)=>v?.['x-liveConfirmed']===true).map(([k])=>k),mediaKind:'video'};
+        return {provider,model,sourceUrl:schemaSource || endpoint,endpoint,inputSchema:img2Decl.inputSchema,requestWrapper:Object.hasOwn(img2Decl,'requestWrapper')?img2Decl.requestWrapper:undefined,modelMetadata:{id:model,name:model,category:'image-to-video',type:'video',endpoint:'/v3/async/img2video'},schemaStatus:'official-html-declaration',schemaSource,declaration:{file:img2Decl.file,sources:img2Decl.sources,fetchedAt:img2Decl.fetchedAt},schemaUnprobed:true,schemaConfirmedFields:Object.entries(img2Decl.inputSchema.properties||{}).filter(([,v]:any)=>v?.['x-liveConfirmed']===true).map(([k])=>k),mediaKind:'video'};
       }
       const {rows,sourceUrl}=await listForSchema(req,provider,credential);
       const entry:any=rows.find((x:any)=>x.id===model) ?? {id:model,notInCatalog:true}; // not in catalog: send the user's model id; upstream decides
@@ -1633,7 +1643,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       const endpoint=schemaProviders.novita.root+(isVideo?'/v3/async/txt2video':'/v3/async/txt2img');
       // No machine-readable official schema: use the configurable HTML-transcribed declaration (src/config/providerDeclarations), if present.
       const decl=entry.parameters?null:loadProviderDeclaration(provider,isVideo?'/v3/async/txt2video':'/v3/async/txt2img');
-      if(!entry.parameters && decl)return {provider,model,sourceUrl,endpoint,inputSchema:decl.inputSchema,modelMetadata:entry,schemaStatus:'official-html-declaration',schemaSource:decl.sources.join(' ; '),declaration:{file:decl.file,sources:decl.sources,fetchedAt:decl.fetchedAt},schemaUnprobed:true,schemaConfirmedFields:Object.entries(decl.inputSchema.properties||{}).filter(([,v]:any)=>v?.['x-liveConfirmed']===true).map(([k])=>k),mediaKind:isVideo?'video':'image'};
+      if(!entry.parameters && decl)return {provider,model,sourceUrl,endpoint,inputSchema:decl.inputSchema,requestWrapper:Object.hasOwn(decl,'requestWrapper')?decl.requestWrapper:undefined,modelMetadata:entry,schemaStatus:'official-html-declaration',schemaSource:decl.sources.join(' ; '),declaration:{file:decl.file,sources:decl.sources,fetchedAt:decl.fetchedAt},schemaUnprobed:true,schemaConfirmedFields:Object.entries(decl.inputSchema.properties||{}).filter(([,v]:any)=>v?.['x-liveConfirmed']===true).map(([k])=>k),mediaKind:isVideo?'video':'image'};
       // No machine-readable schema: send as built (inputSchema null).
       // No fetchable official OpenAPI for Novita (docs 404, 画布 2026-10-15) → catalog rows carry no parameters → always blocked above.
       const inputSchema=entry.parameters;
@@ -1985,7 +1995,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       if(only)mapping.push({from:'canvas parameters and LoRA nodes',to:null,reason:'用户选择了仅提交 JSON 与提示词'});
       const sogniToolName=provider==='sogni'?(definition.hostedToolName || sogniHostedToolName(definition.inputSchema)):undefined;
       if(provider==='sogni' && !sogniToolName)throw Object.assign(new Error(`Sogni live hosted-tool Schema did not yield a toolName from $id or title; source: ${definition.sourceUrl || sogniSchemaSource}`),{status:502,errorSource:'upstream-protocol',endpoint:definition.sourceUrl || sogniSchemaSource});
-      const requestBody=provider==='sogni'?{...workflowOptions,input:Object.hasOwn(workflowOptions,'input')?workflowOptions.input:{title:'Canvas · '+model,steps:[{id:(definition as any).mediaKind==='video'?'clip':'image1',toolName:sogniToolName,arguments:payload}]}}:provider==='novita'?(()=>{const extra=(payload.extra && typeof payload.extra==='object')?payload.extra:{response_image_type:'jpeg'};const {extra:_e,...request}=payload;return {extra,request:{...request,model_name:model}};})():payload;
+      const requestBody=provider==='sogni'?{...workflowOptions,input:Object.hasOwn(workflowOptions,'input')?workflowOptions.input:{title:'Canvas · '+model,steps:[{id:(definition as any).mediaKind==='video'?'clip':'image1',toolName:sogniToolName,arguments:payload}]}}:provider==='novita'?novitaRequestBody(payload,model,(definition as any).requestWrapper):payload;
       actualRequest={endpoint:definition.endpoint,...(definition.catalogLookupFailure?{catalogLookupFailure:definition.catalogLookupFailure}:{}),...(req.body.schemaPrefetchFailure?{schemaPrefetchFailure:req.body.schemaPrefetchFailure}:{}),parameters:requestBody,mapping:mapping.map(m=>({...m,finalValue:Object.hasOwn(payload,m.to)?payload[m.to]:m.scope==='workflow'?workflowOptions.media_references:undefined})),parametersOnly:only,schemaFieldsOnly,...(definition.inputSchema?.properties?{schemaFields:Object.keys(definition.inputSchema.properties)}:{})};
       const {data,status}=await read(req,provider,definition.endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(requestBody)},credential);
       if(provider==='together' && (definition as any).mediaKind!=='video') {
