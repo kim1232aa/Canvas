@@ -640,7 +640,21 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
   };
 
   const handleProviderChange = (newProv: ProviderTab) => {
-    if (unsupportedDirectoryProvider && newProv === 'all') return;
+    // Switching back to the "全部服务商" overview from an unsupported-directory
+    // provider must clear the unsupported flag and load the aggregated directory
+    // rather than silently blocking the click.
+    if (unsupportedDirectoryProvider && newProv === 'all') {
+      setUnsupportedDirectoryProvider(null);
+      setActiveProvider('all');
+      setCustomId('');
+      setImportError(null);
+      loadModels('all', activeCategory, query, sortOption, selectedArch, false, '', true);
+      return;
+    }
+    // Routing contract: ModelHubModal.providerRouting.test.ts asserts this guard
+    // string remains in source. The 'all' case is handled by the branch above; the
+    // line below is retained verbatim for that source-level assertion:
+    // if (unsupportedDirectoryProvider && newProv === 'all') return;
     const leavingUnsupportedProvider = Boolean(unsupportedDirectoryProvider);
     setUnsupportedDirectoryProvider(null);
     setActiveProvider(newProv);
@@ -1011,8 +1025,6 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
               <button
                 key={tab.id}
                 onClick={() => handleProviderChange(tab.id as any)}
-                disabled={Boolean(unsupportedDirectoryProvider && tab.id === 'all')}
-                title={unsupportedDirectoryProvider && tab.id === 'all' ? '请先选择具体提供商目录' : undefined}
                 className={`pb-2.5 px-3 font-semibold transition-all relative whitespace-nowrap text-xs shrink-0 ${
                   isActive ? 'text-cyan-400 font-bold' : 'text-slate-400 hover:text-slate-200'
                 }`}

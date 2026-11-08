@@ -259,3 +259,67 @@ describe('ModelHub real-click stamping of verified base model + checkpoint candi
     expect(nodeMatcherRecommendation(replaceSelectedResource({}, selected, 'lora_name'))).toBeNull();
   });
 });
+
+describe('ModelHub all-provider tab stays clickable from an unsupported-directory provider', () => {
+  let container: HTMLDivElement;
+  let root: ReturnType<typeof createRoot>;
+  afterEach(() => {
+    act(() => root?.unmount());
+    container?.remove();
+  });
+
+  it('does not disable the "全部服务商" tab when opened on a provider without a remote directory', async () => {
+    const { fetchLiveModels } = await import('../services/api');
+    vi.mocked(fetchLiveModels).mockResolvedValue({ civitai: [], _pagination: {} } as never);
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root.render(React.createElement(ModelHubModal, {
+        isOpen: true,
+        onClose: vi.fn(),
+        onSelectModel: vi.fn(),
+        onSelectLoRAWithBaseModel: vi.fn(),
+        initialCategory: 'all',
+        // A provider without a model directory (PROVIDERS_WITHOUT_MODEL_DIRECTORY).
+        initialProvider: 'openai_compat',
+      } as never));
+    });
+    await act(async () => { await Promise.resolve(); });
+    const allTab = Array.from(container.querySelectorAll('button')).find((el) => el.textContent?.trim() === '全部服务商');
+    expect(allTab).toBeDefined();
+    // The "全部服务商" tab must remain enabled (not locked to disabled) so the user
+    // can switch back to the aggregated overview from an unsupported-directory provider.
+    expect(allTab?.disabled).toBe(false);
+  });
+
+  it('clicking the "全部服务商" tab switches away from the unsupported-directory notice', async () => {
+    const { fetchLiveModels } = await import('../services/api');
+    vi.mocked(fetchLiveModels).mockImplementation((async () => ({ civitai: [{ id: 'lora-x', name: 'Lora X', type: 'LORA', category: 'lora', provider: 'civitai', _sourceProvider: 'civitai', baseModel: 'SDXL 1.0' }], _pagination: {} })) as never);
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root.render(React.createElement(ModelHubModal, {
+        isOpen: true,
+        onClose: vi.fn(),
+        onSelectModel: vi.fn(),
+        onSelectLoRAWithBaseModel: vi.fn(),
+        initialCategory: 'all',
+        initialProvider: 'openai_compat',
+      } as never));
+    });
+    await act(async () => { await Promise.resolve(); });
+    // Initially the unsupported-directory notice banner should be present.
+    // The banner renders friendlyProviderLabel('openai_compat') = 'OpenAI 兼容中转'
+    // and the key phrase '对应目录'.
+    expect(container.textContent).toContain('对应目录');
+    const allTab = Array.from(container.querySelectorAll('button')).find((el) => el.textContent?.trim() === '全部服务商');
+    expect(allTab?.disabled).toBe(false);
+    await act(async () => { allTab?.click(); });
+    await act(async () => { await Promise.resolve(); });
+    // After clicking "全部服务商", the unsupported flag clears so the notice banner
+    // disappears and the aggregated all-providers view is shown instead.
+    expect(container.textContent).not.toContain('对应目录');
+  });
+});
