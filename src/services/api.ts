@@ -1,5 +1,6 @@
 import type { HistoryCounts } from '../utils/historyCounts';
 import {tracedFetch} from './executionTrace';
+import {httpErrorFromResponse, httpErrorMessageFromBody, readResponseBody} from '../utils/apiFailure';
 import {normalizeTensorArtModelInfo} from '../utils/tensorArtModelInfo';
 import { ApiKeysState, CivitaiSearchResult, GenerationHistoryItem, ProviderId } from '../types/providers';
 
@@ -96,8 +97,7 @@ export const searchCivitaiModels = async (
 
   const response = await fetch(`/api/civitai/models?${params.toString()}`, { headers });
   if (!response.ok) {
-    const err = await response.json().catch(() => ({ error: 'Civitai API failed' }));
-    throw new Error(err.error || `Civitai query failed: ${response.status}`);
+    throw await httpErrorFromResponse(response, ['error']);
   }
 
   return response.json();
@@ -150,8 +150,7 @@ export const generateWithFal = async (params: {
   });
 
   if (!resp.ok) {
-    const err = await resp.json().catch(() => ({ error: 'Fal.ai generation error' }));
-    throw new Error(err.details || err.error || `Fal.ai failed (${resp.status})`);
+    throw await httpErrorFromResponse(resp);
   }
 
   return resp.json();
@@ -178,8 +177,7 @@ export const generateWithHuggingFace = async (params: {
   });
 
   if (!resp.ok) {
-    const err = await resp.json().catch(() => ({ error: 'Hugging Face error' }));
-    throw new Error(err.details || err.error || `Hugging Face failed (${resp.status})`);
+    throw await httpErrorFromResponse(resp);
   }
 
   return resp.json();
@@ -215,8 +213,7 @@ export const generateWithModelScope = async (params: {
   });
 
   if (!resp.ok) {
-    const err = await resp.json().catch(() => ({ error: 'ModelScope error' }));
-    throw new Error(err.details || err.error || `ModelScope failed (${resp.status})`);
+    throw await httpErrorFromResponse(resp);
   }
 
   return resp.json();
@@ -239,8 +236,7 @@ export const generateWithNanoGPT = async (params: {
   });
 
   if (!resp.ok) {
-    const err = await resp.json().catch(() => ({ error: 'NanoGPT error' }));
-    throw new Error(err.details || err.error || `NanoGPT failed (${resp.status})`);
+    throw await httpErrorFromResponse(resp);
   }
 
   return resp.json();
@@ -265,8 +261,7 @@ export const generateVideo = async (params: {
   });
 
   if (!resp.ok) {
-    const err = await resp.json().catch(() => ({ error: 'Video generation error' }));
-    throw new Error(err.details || err.error || `Video generation failed (${resp.status})`);
+    throw await httpErrorFromResponse(resp);
   }
 
   return resp.json();
@@ -293,8 +288,7 @@ export const generateWithGemini = async (params: {
   });
 
   if (!resp.ok) {
-    const err = await resp.json().catch(() => ({ error: 'Gemini generation error' }));
-    throw new Error(err.details || err.error || `Gemini failed (${resp.status})`);
+    throw await httpErrorFromResponse(resp);
   }
 
   return resp.json();
@@ -380,8 +374,7 @@ export const refinePromptWithGemini = async (
   });
 
   if (!resp.ok) {
-    const err = await resp.json().catch(() => ({ error: 'Prompt refiner failed' }));
-    throw new Error(err.upstreamBody || err.error || `润色失败 [${resp.status}]`);
+    throw await httpErrorFromResponse(resp, ['upstreamBody', 'error']);
   }
 
   const data = await resp.json();
@@ -514,7 +507,8 @@ const fetchLiveModelsOnce = async (
   const resp = await tracedFetch(`/api/models?${params.toString()}`, { headers }, 'catalog');
   
   if (!resp.ok) {
-    const errorData = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
+    const errBody = await readResponseBody(resp);
+    const errorData = errBody.json && typeof errBody.json === 'object' ? errBody.json : { error: errBody.text };
     const upstreamText = typeof errorData.rawResponse === 'string' ? errorData.rawResponse : errorData.rawResponse != null ? JSON.stringify(errorData.rawResponse) : '';
     throw Object.assign(new Error(`HTTP ${resp.status} ${errorData.details || errorData.error || ''}${upstreamText ? `\n${upstreamText}` : ''}`.trim()), {status: resp.status, endpoint: errorData.endpoint, rawResponse: errorData.rawResponse});
   }
@@ -572,8 +566,7 @@ export const fetchHuggingFaceModelInfo = async (modelId: string) => {
 
   const resp = await fetch(`/api/huggingface/model-info?modelId=${encodeURIComponent(modelId)}`, { headers });
   if (!resp.ok) {
-    const errorData = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
-    throw new Error(errorData.details || errorData.error || `HF model query failed (${resp.status})`);
+    throw await httpErrorFromResponse(resp);
   }
   return await resp.json();
 };
@@ -585,8 +578,7 @@ export const fetchTensorArtModelInfo = async (modelId: string) => {
 
   const resp = await fetch(`/api/tensorart/model-info?modelId=${encodeURIComponent(modelId)}`, { headers });
   if (!resp.ok) {
-    const errorData = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
-    throw new Error(errorData.details || errorData.error || `Tensor.Art 模型详情获取失败 (${resp.status})`);
+    throw await httpErrorFromResponse(resp);
   }
   return normalizeTensorArtModelInfo(await resp.json());
 };
@@ -600,8 +592,7 @@ export const fetchReplicateModelInfo = async (model: string) => {
 
   const resp = await fetch(`/api/replicate/model-info?model=${encodeURIComponent(model)}`, { headers });
   if (!resp.ok) {
-    const errorData = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
-    throw new Error(errorData.details || errorData.error || `Replicate model query failed (${resp.status})`);
+    throw await httpErrorFromResponse(resp);
   }
   return await resp.json();
 };
@@ -623,9 +614,11 @@ export interface CloudProjectSummary {
 
 export async function cloudProjectRequest(url: string, init?: RequestInit) {
   const response = await fetch(url, init);
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(`HTTP ${response.status}: ${data.error || data.details || response.statusText}`);
-  return data;
+  const body = await readResponseBody(response);
+  if (!response.ok) throw new Error(httpErrorMessageFromBody(body, ['error', 'details']));
+  if (body.json === undefined && body.text.trim() === '') return {};
+  if (body.json === undefined) throw new Error(`HTTP ${response.status}: 响应不是有效 JSON: ${body.text}`);
+  return body.json;
 }
 export const fetchCloudProjects = async (): Promise<CloudProjectSummary[]> => cloudProjectRequest('/api/cloud/projects');
 export const loadCloudProject = async (id: string): Promise<any> => cloudProjectRequest(`/api/cloud/projects/${encodeURIComponent(id)}`);
@@ -697,11 +690,10 @@ export const fetchCloudServerSettings = async (token?: string): Promise<CloudSet
       const data = await resp.json();
       return { ok: true, status: resp.status, data };
     }
-    const errJson = await resp.json().catch(() => ({}));
     return {
       ok: false,
       status: resp.status,
-      error: errJson.error || `请求失败 [HTTP ${resp.status}]: ${resp.statusText}`,
+      error: httpErrorMessageFromBody(await readResponseBody(resp), ['error']),
     };
   } catch (e: any) {
     return {
@@ -734,11 +726,10 @@ export const saveCloudServerSettings = async (
       const data = await resp.json();
       return { ok: true, status: resp.status, data: data.settings };
     }
-    const errJson = await resp.json().catch(() => ({}));
     return {
       ok: false,
       status: resp.status,
-      error: errJson.error || `保存失败 [HTTP ${resp.status}]: ${resp.statusText}`,
+      error: httpErrorMessageFromBody(await readResponseBody(resp), ['error']),
     };
   } catch (e: any) {
     return {

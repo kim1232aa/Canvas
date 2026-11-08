@@ -15,7 +15,7 @@ describe('local 400 never reached upstream', () => {
     const line = userFacingApiFailure(400, local, '/api/krea/generate');
     expect(line).toBe('没有发出去：该服务商不支持: loras（krea）');
     expect(describeApiFailure(400, local, '/r')).toMatch(/^没有发出去：.*未调用任何上游/);
-    expect(errorBannerText(`${line}\nmore`)).toBe(line);
+    expect(errorBannerText(`${line}\nmore`)).toBe(`${line}\nmore`);
     expect(plainErrorMessage(new Error(line))).toBe(line);
   });
   it('long local reason is not sliced', () => {

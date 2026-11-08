@@ -139,3 +139,26 @@ it('historyFacingErrorMessage reuses history item.error (Magento 401 bind), not 
   expect(plainErrorMessage(Object.assign(new Error(err.message), { data: err.data }))).toMatch(/HTTP 401/);
   expect(facing).not.toMatch(/^HTTP 401 Unauthorized$/);
 });
+
+import {readResponseBody, httpErrorMessageFromBody, httpErrorFromResponse} from './apiFailure';
+it('errorBannerText keeps the full multi-line text (no first-line clipping)',()=>{
+  const multi='HTTP 500 upstream\n{"error":"boom",\n"stack":"at a\\nat b"}\nline4';
+  expect(errorBannerText(multi)).toBe(multi);
+  const local='没有发出去：该服务商不支持: loras（krea）\n更多细节';
+  expect(errorBannerText(local)).toBe(local);
+});
+it('httpErrorFromResponse: non-JSON body kept verbatim with real status',async()=>{
+  const html='<html>502 Bad Gateway cf-ray</html>';
+  const err=await httpErrorFromResponse(new Response(html,{status:502,statusText:'Bad Gateway'}));
+  expect(err.message).toBe(`HTTP 502 Bad Gateway: ${html}`);
+  expect((err as any).status).toBe(502);
+  expect((err as any).responseBody).toBe(html);
+});
+it('httpErrorMessageFromBody: JSON picks details, then error, else raw text',async()=>{
+  const mk=(o:unknown)=>readResponseBody(new Response(JSON.stringify(o),{status:400}));
+  expect(httpErrorMessageFromBody(await mk({error:'e',details:'d'}))).toBe('HTTP 400: d');
+  expect(httpErrorMessageFromBody(await mk({error:'e'}))).toBe('HTTP 400: e');
+  expect(httpErrorMessageFromBody(await mk({other:1}))).toBe('HTTP 400: {"other":1}');
+  expect(httpErrorMessageFromBody(await mk({error:{code:7}}))).toBe('HTTP 400: {"code":7}');
+  expect(httpErrorMessageFromBody(await readResponseBody(new Response('',{status:503})))).toBe('HTTP 503: (空响应体)');
+});

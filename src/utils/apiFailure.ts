@@ -1,6 +1,62 @@
 import { formatBeijingHms } from '../services/executionTrace';
 import { isSchemaPrefetchError, schemaFailureToast } from './schemaFailure';
 
+export interface ReadResponseBody {
+  status: number;
+  statusText: string;
+  /** Verbatim response body text, exactly as received. */
+  text: string;
+  /** Parsed JSON when the body is valid JSON, otherwise undefined. */
+  json: any;
+}
+
+/** Reads an HTTP response body once as text and tries JSON.parse; the raw text is always kept. */
+export async function readResponseBody(resp: Response): Promise<ReadResponseBody> {
+  let text = '';
+  try {
+    text = await resp.text();
+  } catch (e: any) {
+    text = `[响应体读取失败: ${e?.message || String(e)}]`;
+  }
+  let json: any;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    json = undefined;
+  }
+  return { status: resp.status, statusText: resp.statusText || '', text, json };
+}
+
+function stringifyField(value: unknown): string {
+  return typeof value === 'string' ? value : JSON.stringify(value);
+}
+
+/**
+ * Message for a failed HTTP response: real `HTTP <status>` plus the verbatim upstream body.
+ * When the body is a JSON object, the first present field of `fields` is shown; if none is present
+ * (or the body is not JSON) the raw body text is shown unchanged.
+ */
+export function httpErrorMessageFromBody(body: ReadResponseBody, fields: string[] = ['details', 'error']): string {
+  const head = `HTTP ${body.status}${body.statusText ? ` ${body.statusText}` : ''}`;
+  let detail = body.text;
+  if (body.json && typeof body.json === 'object' && !Array.isArray(body.json)) {
+    for (const f of fields) {
+      const v = body.json[f];
+      if (v !== undefined && v !== null && v !== '') {
+        detail = stringifyField(v);
+        break;
+      }
+    }
+  }
+  return detail.trim() ? `${head}: ${detail}` : `${head}: (空响应体)`;
+}
+
+/** Builds the Error for a failed response (reads the body once). */
+export async function httpErrorFromResponse(resp: Response, fields?: string[]): Promise<Error> {
+  const body = await readResponseBody(resp);
+  return Object.assign(new Error(httpErrorMessageFromBody(body, fields)), { status: body.status, responseBody: body.text });
+}
+
 /**
  * Strips local server-side wrapper strings (e.g. "Mage 图像接口上游 HTTP 402: ", "Civitai Orchestration 官方算力返回错误 [400]: ")
  * so the genuine, verbatim upstream response body is preserved and exposed.
@@ -93,9 +149,8 @@ export function plainErrorMessage(err: unknown): string {
 export function errorBannerText(detail: string | null | undefined): string {
   if (!detail) return '';
   const text = String(detail).trim();
-  const first = text.split('\n')[0];
   // Local rejection: verbatim, no rewrite / slice — must not look like upstream failure or success.
-  if (first.startsWith('没有发出去') || first.startsWith('没有发出去 · ')) return first;
+  if (text.startsWith('没有发出去') || text.startsWith('没有发出去 · ')) return text;
   return stripLocalWrapperPrefix(text) || text;
 }
 
