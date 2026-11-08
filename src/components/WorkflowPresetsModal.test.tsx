@@ -2,24 +2,44 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { WorkflowPresetsModal } from './WorkflowPresetsModal';
+import { WORKFLOW_PRESETS } from '../constants/presets';
+
+const renderIncompleteVideo = (overrides: Record<string, unknown>) => {
+  const base = WORKFLOW_PRESETS.find((p) => p.id === 'std-fal-t2v');
+  expect(base, 'current T2V fixture').toBeDefined();
+  const fixture = structuredClone(base!);
+  fixture.id = 'user-incomplete-video';
+  fixture.spatialFrames = [];
+  const video = fixture.nodes.find((n) => n.type === 'AIVideoNode');
+  expect(video, 'T2V video fixture').toBeDefined();
+  video!.values = { ...video!.values, ...overrides };
+  const count = WORKFLOW_PRESETS.length;
+  WORKFLOW_PRESETS.push(fixture);
+  try {
+    return renderToStaticMarkup(<WorkflowPresetsModal isOpen onClose={vi.fn()} onLoadPreset={vi.fn()} onLoadAndRunPreset={vi.fn()} currentNodes={[]} currentConnections={[]} currentSpatialFrames={[]} onImportWorkflowData={vi.fn()} onClearCanvas={vi.fn()} />);
+  } finally {
+    WORKFLOW_PRESETS.splice(count);
+  }
+};
 
 describe('preset modal blocked archives', () => {
-  it('renders unselected models without fabricated families and disables blocked run actions', () => {
+  it('renders named model recipes without fabricated families and disables pending-recipe run actions', () => {
     const html = renderToStaticMarkup(<WorkflowPresetsModal isOpen onClose={vi.fn()} onLoadPreset={vi.fn()} onLoadAndRunPreset={vi.fn()} currentNodes={[]} currentConnections={[]} currentSpatialFrames={[]} onImportWorkflowData={vi.fn()} onClearCanvas={vi.fn()} />);
     expect(html).not.toContain('FLUX / SDXL');
-    // SenseNova/Sogni stay on roster with official default models (ids only appear in DOM when blocked).
-    expect(html).toContain('SenseNova · 标准文生图');
-    expect(html).toContain('Sogni · 标准文生图');
+    expect(html).toContain('SenseNova · 冰箱便签静物');
+    expect(html).toContain('Sogni · 鱼眼赛博漫画');
     expect(html).toContain('sensenova-u1.5-lite');
     expect(html).toContain('krea-2-turbo');
-    expect(html).not.toContain('preset-blocked-std-sensenova-t2i');
-    expect(html).not.toContain('preset-blocked-std-sogni-t2i');
-    // Default presets are runnable as loaded (no 待配方 lock on Krea/MuAPI).
-    expect(html).not.toContain('preset-blocked-std-muapi-t2i');
-    expect(html).not.toContain('preset-blocked-std-krea-t2i');
-    expect(html).toMatch(/bg-slate-700\/80[^"]*"[^>]*disabled=""|disabled=""[^>]*bg-slate-700\/80/);
-    expect(html).toContain('待配置：');
+    for (const provider of ['sensenova', 'sogni', 'muapi', 'krea']) {
+      expect(html).not.toContain(`preset-blocked-std-${provider}-t2i`);
+    }
+    for (const id of ['std-modelslab-t2i', 'std-modelscope-ai-t2i']) {
+      expect(html).toContain(`id="preset-blocked-${id}"`);
+      expect(html).toMatch(new RegExp(`<button[^>]*disabled=""[^>]*aria-describedby="preset-blocked-${id}"[^>]*>[\\s\\S]*?待配方，不能立即运行[\\s\\S]*?</button>`));
+    }
+    expect(html).toContain('待配方：');
     expect(html).toContain('仅载入');
+    expect(html).toContain('仅追加载入待配置模板，不覆盖已有画布');
     expect(html).toContain('追加合并到当前画布，不覆盖已有内容');
   });
 
@@ -44,23 +64,36 @@ describe('preset modal blocked archives', () => {
     expect(html).toContain('✍️ 纯文本输入');
     expect(html).toContain('✍️ 需填写提示词');
     expect(html).toContain('该预设未预填提示词，载入画布后需填写提示词方可运行');
-    // New standard T2V presets rendered
-    expect(html).toContain('Fal.ai · 标准文生视频');
-    expect(html).toContain('WaveSpeed · 标准文生视频');
-    expect(html).toContain('Replicate · 标准文生视频');
-    expect(html).toContain('MuAPI · 标准文生视频');
-    expect(html).toContain('Civitai · 标准文生视频');
+    for (const provider of ['Fal.ai', 'WaveSpeed', 'Civitai']) {
+      expect(html).toContain(`${provider} · 电影镜头文生视频`);
+      expect(html).toContain(`${provider} · 图生视频运镜`);
+    }
+    for (const id of ['std-replicate-t2v', 'std-muapi-t2v', 'std-novita-i2v', 'std-replicate-i2v', 'std-muapi-i2v']) {
+      expect(html).not.toContain(`preset-blocked-${id}`);
+    }
     // T2V is not blocked by reference image
     expect(html).not.toContain('preset-blocked-std-fal-t2v');
     expect(html).not.toContain('preset-blocked-std-wavespeed-t2v');
   });
 
-  it('disables 载入并立即运行 when preset has empty prompt (needsPrompt)', () => {
-    const html = renderToStaticMarkup(<WorkflowPresetsModal isOpen onClose={vi.fn()} onLoadPreset={vi.fn()} onLoadAndRunPreset={vi.fn()} currentNodes={[]} currentConnections={[]} currentSpatialFrames={[]} onImportWorkflowData={vi.fn()} onClearCanvas={vi.fn()} />);
-    // Presets with empty prompts show "需填写提示词" and their run button is disabled
-    expect(html).toContain('需填写提示词');
-    // Button must be disabled and display "需填写提示词"
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>[\s\S]*?需填写提示词[\s\S]*?<\/button>/);
+  it('disables only the empty-prompt run button without relying on another blocked card', () => {
+    const html = renderIncompleteVideo({ prompt: '' });
+    const button = (html.match(/<button\b[^>]*>(?:(?!<\/button>)[\s\S])*<\/button>/g) ?? []).find((b) => b.includes('<span>需填写提示词</span>'));
+    expect(button, 'empty prompt run button').toBeDefined();
+    expect(button).toContain('disabled=""');
+    expect(button).toContain('title="请先载入画布并填写提示词"');
+    expect(button).not.toContain('aria-describedby');
+  });
+
+  it('renders an unselected custom fixture as 待选 and disables its own run action', () => {
+    const html = renderIncompleteVideo({ model: '' });
+    expect(html).toContain('title="待选"');
+    expect(html).toContain('id="preset-blocked-user-incomplete-video"');
+    const button = (html.match(/<button\b[^>]*>(?:(?!<\/button>)[\s\S])*<\/button>/g) ?? []).find((b) => b.includes('aria-describedby="preset-blocked-user-incomplete-video"'));
+    expect(button, 'unselected-model run button').toBeDefined();
+    expect(button).toContain('disabled=""');
+    expect(button).toContain('待配置，不能立即运行');
+    expect(button).toContain('请先载入并选择模型');
   });
 
   it('P1-1: strictly excludes legacy models (Wan 2.1, SVD-XT, SDXL 1.0) from modern recommended presets', () => {
