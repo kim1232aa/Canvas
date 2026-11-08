@@ -213,14 +213,15 @@ export function buildFalVideoRequest(
   }
 
   if (schemaAnyOf.length > 0) {
-    const branchesWithRequired = schemaAnyOf.filter((b) => Array.isArray(b.required) && b.required.length > 0);
-    if (branchesWithRequired.length > 0) {
-      const satisfied = branchesWithRequired.some((branch) =>
-        (branch.required as string[]).every((field) => provided(actual[field])),
-      );
-      if (!satisfied) {
-        fail(`未满足必填组合要求 (${branchesWithRequired.map((b) => (b.required as string[]).join(' + ')).join(' 或 ')})`);
-      }
+    const satisfied = schemaAnyOf.some((branch) => {
+      if (!Array.isArray(branch.required) || branch.required.length === 0) return true;
+      return (branch.required as string[]).every((field) => provided(actual[field]));
+    });
+    if (!satisfied) {
+      const branchReqs = schemaAnyOf
+        .filter((b) => Array.isArray(b.required) && b.required.length > 0)
+        .map((b) => (b.required as string[]).join(' + '));
+      fail(`未满足必填组合要求${branchReqs.length ? ` (${branchReqs.join(' 或 ')})` : ''}`);
     }
   }
 

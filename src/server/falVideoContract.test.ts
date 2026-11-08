@@ -144,5 +144,36 @@ describe('Fal video contract schema-driven validation (no hardcoded endpoint blo
 
     const withVid = buildFalVideoRequest('test-endpoint', { video_url: 'https://example.com/1.mp4' }, schemaWithAnyOf);
     expect(withVid.payload.video_url).toBe('https://example.com/1.mp4');
+
+    // anyOf with an optional (empty required) branch allows empty input
+    const schemaWithOptionalBranch = {
+      type: 'object',
+      properties: {
+        image_url: { type: 'string' },
+      },
+      anyOf: [{ required: ['image_url'] }, {}],
+    };
+    const emptyPassed = buildFalVideoRequest('test-endpoint', {}, schemaWithOptionalBranch);
+    expect(emptyPassed.payload).toEqual({});
+  });
+
+  it('validates raw Kling V3 fixture schema with top-level required array', () => {
+    // Kling V3 OpenAPI input schema has required: ['start_image_url']
+    const klingRawSchema = {
+      type: 'object',
+      properties: loadFalLiveProps(V3_I2V),
+      required: ['start_image_url'],
+    };
+
+    expect(() =>
+      buildFalVideoRequest(V3_I2V, { prompt: 'a scene' }, klingRawSchema),
+    ).toThrowError(/start_image_url 为必填项/);
+
+    const valid = buildFalVideoRequest(
+      V3_I2V,
+      { prompt: 'a scene', image_url: 'https://example.com/start.png' },
+      klingRawSchema,
+    );
+    expect(valid.payload.start_image_url).toBe('https://example.com/start.png');
   });
 });
