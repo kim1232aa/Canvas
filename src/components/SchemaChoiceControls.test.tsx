@@ -124,6 +124,54 @@ describe('SchemaChoiceControls safety fields', () => {
     container.remove();
   });
 
+  it('persists cleared state across renders - does not re-seed after user explicitly cleared a field', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    let currentValue = '{}';
+    const handleChange = vi.fn((v: string) => { currentValue = v; });
+
+    // Initial mount seeds disable_safety_checker=true
+    await act(async () => {
+      root.render(
+        <SchemaChoiceControls
+          inputSchema={{ properties: { disable_safety_checker: { type: 'boolean', default: false } } }}
+          value={currentValue}
+          onChange={handleChange}
+        />
+      );
+    });
+    expect(handleChange).toHaveBeenCalledWith(JSON.stringify({ disable_safety_checker: true }, null, 2));
+    handleChange.mockClear();
+
+    // User clears it to empty
+    const select1 = container.querySelector('select[aria-label="disable_safety_checker"]') as HTMLSelectElement;
+    await act(async () => {
+      select1.value = '';
+      select1.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(handleChange).toHaveBeenCalledWith('{}');
+    currentValue = '{}';
+    handleChange.mockClear();
+
+    // Re-render with same empty value - should NOT re-seed because user cleared it
+    await act(async () => {
+      root.render(
+        <SchemaChoiceControls
+          inputSchema={{ properties: { disable_safety_checker: { type: 'boolean', default: false } } }}
+          value={currentValue}
+          onChange={handleChange}
+        />
+      );
+    });
+    expect(handleChange).not.toHaveBeenCalled();
+    const select2 = container.querySelector('select[aria-label="disable_safety_checker"]') as HTMLSelectElement;
+    expect(select2?.value).toBe('');
+
+    await act(async () => { root.unmount(); });
+    container.remove();
+  });
+
   it('keeps a value the user set and does not overwrite it on mount', async () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -143,6 +191,38 @@ describe('SchemaChoiceControls safety fields', () => {
 
     expect(handleChange).not.toHaveBeenCalled();
     expect(container.textContent).toContain('会发送 true');
+
+    await act(async () => { root.unmount(); });
+    container.remove();
+  });
+});
+
+describe('ParameterInspector CivitaiAllowMatureControl', () => {
+  it('preserves invalid JSON and displays parse error without overwriting', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const handleChange = vi.fn();
+    const invalidJson = '{invalid json}';
+
+    await act(async () => {
+      root.render(
+        <div>
+          {/* CivitaiAllowMatureControl is not exported, so we import it via dynamic import for testing */}
+          {React.createElement(
+            (await import('./ParameterInspector')).CivitaiAllowMatureControl,
+            { customParameters: invalidJson, onChangeCustom: handleChange }
+          )}
+        </div>
+      );
+    });
+
+    expect(container.textContent).toContain('custom_parameters JSON 解析失败');
+    expect(container.textContent).toContain('Expected property name');
+    expect(handleChange).not.toHaveBeenCalled();
+    
+    const select = container.querySelector('select[aria-label="Civitai allowMatureContent"]') as HTMLSelectElement;
+    expect(select?.disabled).toBe(true);
 
     await act(async () => { root.unmount(); });
     container.remove();

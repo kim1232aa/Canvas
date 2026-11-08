@@ -53,7 +53,18 @@ export function CivitaiAllowMatureControl({
   const seededRef = React.useRef(false);
 
   let customObj: Record<string, any> = {};
-  try { customObj = JSON.parse(customParameters || '{}'); } catch {}
+  let parseError: string | undefined;
+  try {
+    const parsed = JSON.parse(customParameters || '{}');
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      customObj = parsed;
+    } else {
+      parseError = 'JSON 必须是对象';
+    }
+  } catch (err) {
+    parseError = err instanceof Error ? err.message : String(err);
+  }
+
   const rawUnset = customObj.allowMatureContent === undefined;
   const isUnset = rawUnset && cleared;
   const currentVal = isUnset ? undefined : (rawUnset ? true : Boolean(customObj.allowMatureContent));
@@ -62,14 +73,20 @@ export function CivitaiAllowMatureControl({
     : `会发送 ${String(currentVal)}`;
 
   React.useEffect(() => {
-    if (rawUnset && !seededRef.current) {
+    if (rawUnset && !seededRef.current && !parseError) {
       seededRef.current = true;
       onChangeCustom(JSON.stringify({ ...customObj, allowMatureContent: true }, null, 2));
     }
-  }, [rawUnset]);
+  }, [rawUnset, parseError]);
 
   return (
     <div className="space-y-1 pt-1" data-testid="civitai-allow-mature-control">
+      {parseError && (
+        <div className="mb-2 rounded border border-red-500/50 bg-red-950/20 px-2 py-1.5 text-xs text-red-300">
+          <div className="font-semibold">custom_parameters JSON 解析失败</div>
+          <div className="font-mono text-[10px] mt-0.5">{parseError}</div>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <label className="text-sm text-slate-300">Civitai allowMatureContent</label>
         <span className={`text-[10px] px-1.5 py-0.5 rounded border ${isUnset ? 'border-slate-600 text-slate-400' : 'border-emerald-500/50 text-emerald-300'}`}>
@@ -78,6 +95,7 @@ export function CivitaiAllowMatureControl({
       </div>
       <select
         aria-label="Civitai allowMatureContent"
+        disabled={Boolean(parseError)}
         value={isUnset ? '' : String(currentVal)}
         onChange={(e) => {
           const nextCustom = { ...customObj };
@@ -96,7 +114,7 @@ export function CivitaiAllowMatureControl({
         <option value="true">true</option>
         <option value="false">false</option>
       </select>
-      {currentVal !== true && (
+      {currentVal !== true && !parseError && (
         <div className="flex items-center justify-end text-[11px] px-2 py-1">
           <button
             type="button"

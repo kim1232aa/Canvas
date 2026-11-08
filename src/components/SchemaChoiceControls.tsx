@@ -324,7 +324,7 @@ export function SchemaChoiceControls({
   const loraDescriptions = schemaLoraDescriptions(inputSchema, openapi);
   const declaredKeys = Object.keys(inputSchema?.properties || {});
   const nsfwKeySig = fields.filter((f) => f.isNsfw).map((f) => f.key).sort().join(',');
-  const clearedKeys: Record<string, boolean> = {};
+  const clearedKeysRef = React.useRef<Record<string, boolean>>({});
 
   if (!fields.length && !loraDescriptions.length) return null;
   const body = parse(value);
@@ -332,12 +332,12 @@ export function SchemaChoiceControls({
     const b = parse(value);
     if (!b) return;
     if (isCleared) {
-      clearedKeys[key] = true;
+      clearedKeysRef.current[key] = true;
     } else {
-      delete clearedKeys[key];
+      delete clearedKeysRef.current[key];
     }
     for (const f of fields) {
-      if (f.isNsfw && f.nsfwPolicy && b[f.key] === undefined && !clearedKeys[f.key] && f.key !== key) {
+      if (f.isNsfw && f.nsfwPolicy && b[f.key] === undefined && !clearedKeysRef.current[f.key] && f.key !== key) {
         b[f.key] = f.nsfwPolicy.permissiveValue;
       }
     }
