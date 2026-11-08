@@ -34,6 +34,24 @@ const CANVAS_WIRES: Array<[string, string[]]> = [
 ];
 
 /**
+ * Check if a property specification accepts null (via nullable: true, type: 'null', or anyOf/oneOf with type: 'null').
+ */
+export const isNullableProp = (spec: unknown): boolean => {
+  if (!spec || typeof spec !== 'object' || Array.isArray(spec)) return false;
+  const s = spec as Record<string, unknown>;
+  if (s.nullable === true) return true;
+  if (s.type === 'null') return true;
+  if (Array.isArray(s.type) && s.type.includes('null')) return true;
+  if (Array.isArray(s.anyOf) && s.anyOf.some((branch) => Boolean(branch && typeof branch === 'object' && (branch as Record<string, unknown>).type === 'null'))) {
+    return true;
+  }
+  if (Array.isArray(s.oneOf) && s.oneOf.some((branch) => Boolean(branch && typeof branch === 'object' && (branch as Record<string, unknown>).type === 'null'))) {
+    return true;
+  }
+  return false;
+};
+
+/**
  * Build Fal video outbound body from live OpenAPI Input properties.
  * Static FAL_MODELS is UI clue only — never alone authorizes outbound.
  */
@@ -42,11 +60,29 @@ export function buildFalVideoRequest(
   body: Record<string, unknown>,
   liveInputProperties?: Record<string, unknown>,
   schemaFetchFailure?: FalSchemaFetchFailure,
+  liveRequired?: readonly string[],
 ) {
   if (!liveInputProperties || typeof liveInputProperties !== 'object' || Array.isArray(liveInputProperties)) {
     throw new FalSchemaMissingError(endpoint, schemaFetchFailure);
   }
-  const props = liveInputProperties;
+  const rawSchema = liveInputProperties;
+  const hasNestedProps =
+    rawSchema.properties !== null &&
+    typeof rawSchema.properties === 'object' &&
+    !Array.isArray(rawSchema.properties) &&
+    (rawSchema.type === 'object' || Array.isArray(rawSchema.required) || Array.isArray(rawSchema.anyOf));
+  const rawProps = hasNestedProps ? (rawSchema.properties as Record<string, unknown>) : rawSchema;
+  const schemaRequired = Array.isArray(liveRequired)
+    ? liveRequired
+    : Array.isArray(rawSchema.required)
+      ? (rawSchema.required as unknown[]).filter((k): k is string => typeof k === 'string')
+      : [];
+  const schemaAnyOf = Array.isArray(rawSchema.anyOf)
+    ? (rawSchema.anyOf as unknown[]).filter((b): b is Record<string, unknown> => Boolean(b && typeof b === 'object' && !Array.isArray(b)))
+    : [];
+  const props: Record<string, unknown> = Object.fromEntries(
+    Object.entries(rawProps).filter(([k, v]) => !((k === 'required' || k === 'anyOf') && Array.isArray(v))),
+  );
   const fail = (message: string): never => { throw new FalVideoContractError(message); };
   if ('custom_parameters' in body && (!body.custom_parameters || typeof body.custom_parameters !== 'object' || Array.isArray(body.custom_parameters))) {
     fail('custom_parameters 必须为有效 JSON 对象 (object)');
@@ -54,9 +90,6 @@ export function buildFalVideoRequest(
   if (provided(body.cfg) && provided(body.guidance_scale) && Number(body.cfg) !== Number(body.guidance_scale)) {
     fail('cfg 与 guidance_scale 不一致；请只提供一个来源或相同值');
   }
-
-  const hasDuration = 'duration' in props;
-  const hasNumFrames = 'num_frames' in props;
 
   const cfgWire = (['guidance_scale', 'guide_scale', 'cfg_scale', 'cfg'] as const).find((w) => w in props) ?? 'guidance_scale';
   const imageWire = falVideoImageFieldFromLive(props);
@@ -130,22 +163,29 @@ export function buildFalVideoRequest(
     const resSchema = props.resolution as { enum?: unknown[] } | undefined;
     void resSchema;
   }
-  if (provided(body.image_url) && provided(body.start_image_url) && body.image_url !== body.start_image_url) fail('image_url 与 start_image_url 不一致');
-  const siteReference = provided(body.start_image_url) ? body.start_image_url : body.image_url;
-  if (provided(siteReference)) {
+  const hasBodyStart = Object.hasOwn(body, 'start_image_url') && body.start_image_url !== undefined;
+  const hasBodyImg = Object.hasOwn(body, 'image_url') && body.image_url !== undefined;
+  if (hasBodyStart && hasBodyImg && body.image_url !== body.start_image_url) {
+    fail('image_url 与 start_image_url 不一致');
+  }
+  const siteReference = hasBodyStart ? body.start_image_url : hasBodyImg ? body.image_url : undefined;
+  if (siteReference !== undefined) {
     payload[imageWire ?? 'image_url'] = siteReference;
   }
 
   const beforeCustom = { ...payload };
   const custom = (body.custom_parameters ?? {}) as Record<string, unknown>;
   if (['model', 'provider', 'endpoint', 'inference_provider'].some((key) => Object.hasOwn(custom, key))) fail('custom_parameters 不可覆盖模型或路由');
-  if (provided(custom.image_url) && provided(custom.start_image_url) && custom.image_url !== custom.start_image_url) fail('image_url 与 start_image_url 不一致');
+  const hasCustomStart = Object.hasOwn(custom, 'start_image_url') && custom.start_image_url !== undefined;
+  const hasCustomImg = Object.hasOwn(custom, 'image_url') && custom.image_url !== undefined;
+  if (hasCustomStart && hasCustomImg && custom.image_url !== custom.start_image_url) {
+    fail('image_url 与 start_image_url 不一致');
+  }
   for (const key of Object.keys(custom)) if (CONTROLS.test(key)) fail(`custom_parameters 不可覆盖模型/路由/凭据: ${key}`);
 
   const mappedCustom = mapInputs(custom);
-  const hasCustomReference = Object.hasOwn(custom, 'start_image_url') || Object.hasOwn(custom, 'image_url');
-  const customReference = Object.hasOwn(custom, 'start_image_url') ? custom.start_image_url : custom.image_url;
-  if (hasCustomReference) {
+  const customReference = hasCustomStart ? custom.start_image_url : hasCustomImg ? custom.image_url : undefined;
+  if (customReference !== undefined) {
     delete mappedCustom.image_url;
     delete mappedCustom.start_image_url;
     mappedCustom[imageWire ?? 'image_url'] = customReference;
@@ -169,18 +209,58 @@ export function buildFalVideoRequest(
   );
   const actual = { ...payload, ...mappedCustom };
 
-  const reference = imageWire ? actual[imageWire] : undefined;
-  if (endpoint === 'fal-ai/wan/v2.7/image-to-video') {
-    if (!provided(reference) && !provided(actual.video_url)) fail('image_url 或 video_url 为必填项');
-  } else if (imageWire && (endpoint.endsWith('/image-to-video') || endpoint === 'fal-ai/wan-i2v') && !provided(reference)) {
-    fail(`${imageWire}（或 image_url）为必填项`);
-  }
-  if (provided(reference) && imageWire) {
+  if (imageWire && (Object.hasOwn(actual, 'image_url') || Object.hasOwn(actual, 'start_image_url'))) {
+    const chosen = Object.hasOwn(actual, imageWire)
+      ? actual[imageWire]
+      : Object.hasOwn(actual, 'start_image_url')
+        ? actual.start_image_url
+        : actual.image_url;
     delete actual.image_url;
     delete actual.start_image_url;
-    actual[imageWire] = reference;
+    actual[imageWire] = chosen;
   }
-  if (provided(actual.duration) && isKlingV3(endpoint)) actual.duration = klingV3Duration(actual.duration);
+
+  // Schema-driven required validation: driven strictly by live OpenAPI required / anyOf.
+  // Validate property presence on actual payload; do not reject valid empty strings, empty arrays, or nullable nulls.
+  const isFieldSatisfied = (field: string): boolean => {
+    if (!Object.hasOwn(actual, field)) return false;
+    const val = actual[field];
+    if (val === undefined) return false;
+    if (val === null) {
+      return isNullableProp(props[field]);
+    }
+    return true;
+  };
+
+  const propLevelRequired = Object.entries(props)
+    .filter(([_, spec]) => spec && typeof spec === 'object' && (spec as any).required === true)
+    .map(([k]) => k);
+  const allRequired = Array.from(new Set([...schemaRequired, ...propLevelRequired]));
+  for (const reqField of allRequired) {
+    if (!isFieldSatisfied(reqField)) {
+      fail(`${reqField} 为必填项`);
+    }
+  }
+
+  if (schemaAnyOf.length > 0) {
+    const satisfied = schemaAnyOf.some((branch) => {
+      if (!Array.isArray(branch.required) || branch.required.length === 0) return true;
+      return (branch.required as string[]).every((field) => isFieldSatisfied(field));
+    });
+    if (!satisfied) {
+      const branchReqs = schemaAnyOf
+        .filter((b) => Array.isArray(b.required) && b.required.length > 0)
+        .map((b) => (b.required as string[]).join(' + '));
+      fail(`未满足必填组合要求${branchReqs.length ? ` (${branchReqs.join(' 或 ')})` : ''}`);
+    }
+  }
+
+  const durationSpec = props.duration as Record<string, unknown> | undefined;
+  const durationType = durationSpec && typeof durationSpec === 'object' ? durationSpec.type : undefined;
+  if (provided(actual.duration) && durationType === 'string') {
+    actual.duration = String(actual.duration);
+  }
+
   return { payload: actual, beforeCustom, customParameters: { ...custom }, overrides, fieldStatus, schemaFields: Object.keys(props) };
 }
 
@@ -197,9 +277,6 @@ export const falVideoImageField = (endpoint: string): 'start_image_url' | 'image
   isKlingV3(endpoint) && endpoint.endsWith('/image-to-video') ? 'start_image_url' : 'image_url';
 
 export function klingV3Duration(value: unknown): string {
-  const seconds = Number(value);
-  if (value === '' || value === null || value === undefined || !Number.isInteger(seconds)) {
-    throw new Error('Kling V3 duration 须为整数秒');
-  }
-  return String(seconds);
+  if (value === '' || value === null || value === undefined) return '';
+  return String(value);
 }
