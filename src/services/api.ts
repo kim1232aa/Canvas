@@ -437,9 +437,17 @@ export const fetchHistoryItem = async (id: string): Promise<GenerationHistoryIte
 };
 
 export const saveToHistory = async (item: Partial<GenerationHistoryItem>) => historyRequest('/api/history', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(item)});
-export const deleteHistoryItem = async (id: string) => {await historyRequest(`/api/history/${encodeURIComponent(id)}`, {method: 'DELETE'}); return true;};
-export const deleteHistoryBatch = async (ids: string[]) => {await historyRequest('/api/history/delete-batch', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ids})}); return true;};
-export const clearHistory = async () => {await historyRequest('/api/history', {method: 'DELETE'}); return true;};
+/** History delete helpers: a non-2xx response throws `HTTP <status>: <body>` (historyRequest); a 2xx body with `success:false` throws its verbatim body too. Never resolves true without server confirmation. */
+async function historyDeleteRequest(path: string, init: RequestInit): Promise<true> {
+  const body = await historyRequest(path, init);
+  if (body && typeof body === 'object' && (body as { success?: unknown }).success === false) {
+    throw new Error(`HTTP 200 (success:false): ${JSON.stringify(body)}`);
+  }
+  return true;
+}
+export const deleteHistoryItem = async (id: string) => historyDeleteRequest(`/api/history/${encodeURIComponent(id)}`, {method: 'DELETE'});
+export const deleteHistoryBatch = async (ids: string[]) => historyDeleteRequest('/api/history/delete-batch', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ids})});
+export const clearHistory = async () => historyDeleteRequest('/api/history', {method: 'DELETE'});
 
 
 /** clean-1149 #2: custom_parameters JSON (often with _canvas) must never become /api/models?query={…}. */
