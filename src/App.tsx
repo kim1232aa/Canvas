@@ -553,7 +553,7 @@ export default function App() {
       params: {
         checkpoint: '',
         loras: [],
-        targetProvider: '' as unknown as ComfyParameters['targetProvider'],
+        targetProvider: '',
       },
       status: 'idle',
       createdAt: Date.now(),
@@ -668,10 +668,21 @@ export default function App() {
       let finalPrompt = frame.prompt;
       let prependedTriggerWords = '';
       if (p.loras.length > 0) {
-        const triggers = p.loras.map((l) => l.triggerWords?.trim()).filter(Boolean).join(', ');
-        if (triggers && !finalPrompt.includes(triggers)) {
-          finalPrompt = finalPrompt ? `${triggers}, ${finalPrompt}`.trim() : triggers;
-          prependedTriggerWords = finalPrompt !== frame.prompt ? triggers : '';
+        const missingTriggers: string[] = [];
+        for (const l of p.loras) {
+          const raw = (l.triggerWords || '').trim();
+          if (!raw) continue;
+          const words = raw.split(',').map((w) => w.trim()).filter(Boolean);
+          for (const word of words) {
+            if (!finalPrompt.includes(word) && !missingTriggers.includes(word)) {
+              missingTriggers.push(word);
+            }
+          }
+        }
+        if (missingTriggers.length > 0) {
+          const toAdd = missingTriggers.join(', ');
+          finalPrompt = finalPrompt ? `${toAdd}, ${finalPrompt}`.trim() : toAdd;
+          prependedTriggerWords = toAdd;
         }
       }
 
@@ -3460,7 +3471,7 @@ export default function App() {
               params: activeFrame?.params || {
                 checkpoint: '',
                 loras: [],
-                targetProvider: '' as unknown as ComfyParameters['targetProvider'],
+                targetProvider: '',
               },
             });
             setInspectingMediaItem(null);

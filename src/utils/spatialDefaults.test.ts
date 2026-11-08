@@ -13,6 +13,27 @@ import type { SpatialFrame } from '../types/graph';
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
+const MOCK_VIDEO_CATALOG = {
+  civitai: [
+    {
+      id: 'fal-ai/wan/v2.2-a14b/text-to-video/lora',
+      name: 'Wan 2.2 A14B Text-to-Video LoRA',
+      category: 'Video',
+      type: 'Video',
+      provider: 'civitai',
+    },
+  ],
+  fal: [
+    {
+      id: 'fal-ai/wan/v2.2-a14b/text-to-video/lora',
+      name: 'Wan 2.2 A14B Text-to-Video LoRA',
+      category: 'Video',
+      type: 'Video',
+      provider: 'fal',
+    },
+  ],
+};
+
 describe('M94: Spatial defaults and promptTransform auditability', () => {
   let host: HTMLDivElement | null = null;
   let root: Root | null = null;
@@ -22,7 +43,16 @@ describe('M94: Spatial defaults and promptTransform auditability', () => {
     if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {};
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } }))
+      vi.fn(async (url: string) => {
+        // console.log('FETCH URL:', url);
+        if (typeof url === 'string' && (url.includes('/api/models') || url.includes('models'))) {
+          return new Response(JSON.stringify(MOCK_VIDEO_CATALOG), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+        return new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } });
+      })
     );
     host = document.createElement('div');
     document.body.appendChild(host);
@@ -78,7 +108,6 @@ describe('M94: Spatial defaults and promptTransform auditability', () => {
     expect(board.spatialFrames.length).toBe(1);
 
     const frame: SpatialFrame = board.spatialFrames[0];
-    // Prompt & Negative Prompt must be empty (no majestic dragon)
     expect(frame.prompt).toBe('');
     expect(frame.negativePrompt).toBe('');
 
@@ -98,32 +127,174 @@ describe('M94: Spatial defaults and promptTransform auditability', () => {
     expect(frame.params.loras).toEqual([]);
   });
 
-  it('NODE_DEFINITIONS["AIVideoNode"] 与新建 AIVideoNode 不再注入 hardcoded 英文 prompt、fps 24/30、steps 30、cfg 5.0/6.0', () => {
-    const def = NODE_DEFINITIONS['AIVideoNode'];
-    expect(def).toBeDefined();
+  it('P2-1 行为测试：新建空取景框点击生成时不调用 EngineRegistry，显示缺 provider 提示', async () => {
+    const generateSpy = vi.spyOn(EngineRegistry, 'generate');
 
-    // Node definition defaultValues must not invent prompts or sampling parameters
-    expect(def.defaultValues.prompt).toBe('');
-    expect(def.defaultValues.negative_prompt).toBe('');
-    expect(def.defaultValues.fps).toBe('');
-    expect(def.defaultValues.duration).toBe('');
-    expect(def.defaultValues.aspect_ratio).toBe('');
-    expect(def.defaultValues.steps).toBeUndefined();
-    expect(def.defaultValues.cfg).toBeUndefined();
+    localStorage.setItem(
+      BOARDS_KEY,
+      JSON.stringify([
+        {
+          id: 'board-spatial',
+          name: '空间画布',
+          nodes: [],
+          connections: [],
+          spatialFrames: [],
+        },
+      ])
+    );
+    localStorage.setItem(ACTIVE_BOARD_KEY, 'board-spatial');
+    localStorage.setItem(MODE_KEY, 'spatial');
 
-    // Simulating node values populated when created from Model Hub
-    const nodeValues: Record<string, any> = {
-      ...(def ? def.defaultValues : {}),
-      model: 'wan-video/wan2.1-t2v-14b',
-      targetProvider: 'fal',
-    };
+    await act(async () => {
+      root!.render(React.createElement(App));
+    });
 
-    expect(nodeValues.model).toBe('wan-video/wan2.1-t2v-14b');
-    expect(nodeValues.targetProvider).toBe('fal');
-    expect(nodeValues.prompt).toBe('');
-    expect(nodeValues.steps).toBeUndefined();
-    expect(nodeValues.cfg).toBeUndefined();
-    expect(nodeValues.fps).toBe('');
+    // 1. 新建空取景框 (targetProvider: '', checkpoint: '')
+    const addFrameBtn = document.querySelector('button[aria-label="新建取景框"]') as HTMLButtonElement;
+    await act(async () => {
+      addFrameBtn.click();
+    });
+
+    // 2. 点击生成按钮
+    const runBtn = Array.from(document.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('生成此选区画板')
+    ) as HTMLButtonElement;
+    expect(runBtn).toBeDefined();
+
+    await act(async () => {
+      runBtn.click();
+    });
+
+    // 3. 必须被 generationReadiness 拦截，不得调用底层引擎
+    expect(generateSpy).toHaveBeenCalledTimes(0);
+
+    // 4. UI 提示必须包含缺服务商警告
+    expect(document.body.textContent).toContain('请选择执行服务商');
+    expect(document.body.textContent).toContain('无法生成');
+  });
+
+  it('P2-3 入口1：通过模型中心「应用为视频模型」创建 AIVideoNode，不注入 prompt/fps/steps/cfg', async () => {
+    localStorage.setItem(
+      BOARDS_KEY,
+      JSON.stringify([
+        {
+          id: 'board-graph',
+          name: '图节点画布',
+          nodes: [],
+          connections: [],
+          spatialFrames: [],
+        },
+      ])
+    );
+    localStorage.setItem(ACTIVE_BOARD_KEY, 'board-graph');
+    localStorage.setItem(MODE_KEY, 'graph');
+
+    await act(async () => {
+      root!.render(React.createElement(App));
+    });
+
+    // 1. 打开视频模型中心
+    const videoHubBtn = Array.from(document.querySelectorAll('button')).find((b) =>
+      b.textContent?.trim() === '视频模型'
+    ) as HTMLButtonElement;
+    expect(videoHubBtn).toBeDefined();
+
+    await act(async () => {
+      videoHubBtn.click();
+    });
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 100));
+    });
+
+    // 2. 点击「应用为视频模型」按钮 (调用 App.tsx:handleSelectModelFromHub 入口)
+    const applyBtn = Array.from(document.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('应用为视频模型')
+    ) as HTMLButtonElement;
+    expect(applyBtn).toBeDefined();
+
+    await act(async () => {
+      applyBtn.click();
+    });
+
+    // 3. 断言生产路径创建的 AIVideoNode 节点属性
+    const rawBoards = localStorage.getItem(BOARDS_KEY);
+    const boards = JSON.parse(rawBoards!);
+    const board = boards.find((b: any) => b.id === 'board-graph');
+    const videoNode = board.nodes.find((n: any) => n.type === 'AIVideoNode');
+    expect(videoNode).toBeDefined();
+
+    expect(videoNode.values.model).toBe('fal-ai/wan/v2.2-a14b/text-to-video/lora');
+    expect(videoNode.values.targetProvider).toBe('civitai');
+    expect(videoNode.values.prompt).toBe('');
+    expect(videoNode.values.negative_prompt).toBe('');
+    expect(videoNode.values.fps).toBe('');
+    expect(videoNode.values.duration).toBe('');
+    expect(videoNode.values.aspect_ratio).toBe('');
+    expect(videoNode.values.steps).toBeUndefined();
+    expect(videoNode.values.cfg).toBeUndefined();
+  });
+
+  it('P2-3 入口2：通过模型中心「添加视频节点」创建 AIVideoNode，不注入 prompt/fps/steps/cfg', async () => {
+    localStorage.setItem(
+      BOARDS_KEY,
+      JSON.stringify([
+        {
+          id: 'board-graph',
+          name: '图节点画布',
+          nodes: [],
+          connections: [],
+          spatialFrames: [],
+        },
+      ])
+    );
+    localStorage.setItem(ACTIVE_BOARD_KEY, 'board-graph');
+    localStorage.setItem(MODE_KEY, 'graph');
+
+    await act(async () => {
+      root!.render(React.createElement(App));
+    });
+
+    // 1. 打开视频模型中心
+    const videoHubBtn = Array.from(document.querySelectorAll('button')).find((b) =>
+      b.textContent?.trim() === '视频模型'
+    ) as HTMLButtonElement;
+    expect(videoHubBtn).toBeDefined();
+
+    await act(async () => {
+      videoHubBtn.click();
+    });
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    // 2. 点击「添加视频节点」按钮 (调用 App.tsx:onAddModelNode 入口)
+    const addNodeBtn = Array.from(document.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('添加视频节点')
+    ) as HTMLButtonElement;
+    expect(addNodeBtn).toBeDefined();
+
+    await act(async () => {
+      addNodeBtn.click();
+    });
+
+    // 3. 断言生产路径创建的 AIVideoNode 节点属性
+    const rawBoards = localStorage.getItem(BOARDS_KEY);
+    const boards = JSON.parse(rawBoards!);
+    const board = boards.find((b: any) => b.id === 'board-graph');
+    const videoNode = board.nodes.find((n: any) => n.type === 'AIVideoNode');
+    expect(videoNode).toBeDefined();
+
+    expect(videoNode.values.model).toBe('fal-ai/wan/v2.2-a14b/text-to-video/lora');
+    expect(videoNode.values.targetProvider).toBe('civitai');
+    expect(videoNode.values.prompt).toBe('');
+    expect(videoNode.values.negative_prompt).toBe('');
+    expect(videoNode.values.fps).toBe('');
+    expect(videoNode.values.duration).toBe('');
+    expect(videoNode.values.aspect_ratio).toBe('');
+    expect(videoNode.values.steps).toBeUndefined();
+    expect(videoNode.values.cfg).toBeUndefined();
   });
 
   it('spatialRequestParameters 在采样参数留空时正常处理，不凭空捏造 25/4.5/euler/0.8', () => {
@@ -148,7 +319,6 @@ describe('M94: Spatial defaults and promptTransform auditability', () => {
     expect(norm.model).toBe('flux-schnell');
     expect(norm.provider).toBe('fal');
     expect(norm.prompt).toBe('a scenic view of mountains');
-    // Sampling parameters remain undefined, deferred to upstream or user
     expect(norm.steps).toBeUndefined();
     expect(norm.cfg).toBeUndefined();
     expect(norm.sampler_name).toBeUndefined();
@@ -213,7 +383,6 @@ describe('M94: Spatial defaults and promptTransform auditability', () => {
       root!.render(React.createElement(App));
     });
 
-    // Find the queue / generate button for the frame
     const runBtn = Array.from(document.querySelectorAll('button')).find((b) =>
       b.textContent?.includes('生成此选区画板')
     ) as HTMLButtonElement;
@@ -225,10 +394,8 @@ describe('M94: Spatial defaults and promptTransform auditability', () => {
     });
 
     expect(capturedNormParams).not.toBeNull();
-    // The final prompt should have prepended trigger words
     expect(capturedNormParams.prompt).toBe('neon glow, synthwave, cyberpunk vehicle in rain');
 
-    // workflowSnapshot.requestMetadata.promptTransform must record prependedTriggerWords, originalPrompt, and finalPrompt
     const meta = capturedNormParams.workflowSnapshot?.requestMetadata;
     expect(meta).toBeDefined();
     expect(meta.promptTransform).toEqual({
@@ -238,7 +405,7 @@ describe('M94: Spatial defaults and promptTransform auditability', () => {
     });
   });
 
-  it('当 prompt 已经包含 triggerWords 时，prependedTriggerWords 为空且不重复拼接', async () => {
+  it('P2-2 测试 A：全部触发词已存在但非连续/顺序不同时，不重复拼接且 prependedTriggerWords 为空', async () => {
     let capturedNormParams: any = null;
     vi.spyOn(EngineRegistry, 'generate').mockImplementation(async (_provider, params) => {
       capturedNormParams = params;
@@ -252,13 +419,14 @@ describe('M94: Spatial defaults and promptTransform auditability', () => {
       };
     });
 
+    // 触发词为 "neon glow, synthwave"，但 prompt 中顺序颠倒且不连续
     const initialFrame: SpatialFrame = {
       id: 'frame-audit-2',
       title: '空间审计框2',
       pos: { x: 100, y: 100 },
       width: 480,
       height: 480,
-      prompt: 'neon glow, synthwave, futuristic city street',
+      prompt: 'synthwave street with neon glow',
       negativePrompt: '',
       status: 'idle',
       createdAt: Date.now(),
@@ -304,18 +472,98 @@ describe('M94: Spatial defaults and promptTransform auditability', () => {
     });
 
     expect(capturedNormParams).not.toBeNull();
-    expect(capturedNormParams.prompt).toBe('neon glow, synthwave, futuristic city street');
+    // 触发词均已存在，不许产生重复前置
+    expect(capturedNormParams.prompt).toBe('synthwave street with neon glow');
 
     const meta = capturedNormParams.workflowSnapshot?.requestMetadata;
     expect(meta).toBeDefined();
     expect(meta.promptTransform).toEqual({
       prependedTriggerWords: '',
-      originalPrompt: 'neon glow, synthwave, futuristic city street',
-      finalPrompt: 'neon glow, synthwave, futuristic city street',
+      originalPrompt: 'synthwave street with neon glow',
+      finalPrompt: 'synthwave street with neon glow',
     });
   });
 
-  it('onSendToImg2Video 衍生新帧时不注入 width: 832, height: 480, denoise: 1.0', async () => {
+  it('P2-2 测试 B：只缺部分触发词时，只前置真正缺失的词并准确记录 promptTransform', async () => {
+    let capturedNormParams: any = null;
+    vi.spyOn(EngineRegistry, 'generate').mockImplementation(async (_provider, params) => {
+      capturedNormParams = params;
+      return {
+        mediaUrl: 'https://example.com/output.png',
+        provider: 'fal',
+        providerId: 'fal',
+        model: 'flux-dev',
+        mediaType: 'image',
+        seed: 12345,
+      };
+    });
+
+    // 触发词为 "neon glow, synthwave"，prompt 已有 "synthwave"，仅缺少 "neon glow"
+    const initialFrame: SpatialFrame = {
+      id: 'frame-audit-3',
+      title: '空间审计框3',
+      pos: { x: 100, y: 100 },
+      width: 480,
+      height: 480,
+      prompt: 'synthwave street view',
+      negativePrompt: '',
+      status: 'idle',
+      createdAt: Date.now(),
+      params: {
+        checkpoint: 'black-forest-labs/FLUX.1-dev',
+        targetProvider: 'fal',
+        loras: [
+          {
+            name: 'neon-style-lora',
+            triggerWords: 'neon glow, synthwave',
+          },
+        ],
+      },
+    };
+
+    localStorage.setItem(
+      BOARDS_KEY,
+      JSON.stringify([
+        {
+          id: 'board-spatial',
+          name: '空间画布',
+          nodes: [],
+          connections: [],
+          spatialFrames: [initialFrame],
+        },
+      ])
+    );
+    localStorage.setItem(ACTIVE_BOARD_KEY, 'board-spatial');
+    localStorage.setItem(MODE_KEY, 'spatial');
+
+    await act(async () => {
+      root!.render(React.createElement(App));
+    });
+
+    const runBtn = Array.from(document.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('生成此选区画板')
+    ) as HTMLButtonElement;
+
+    expect(runBtn).toBeDefined();
+
+    await act(async () => {
+      runBtn.click();
+    });
+
+    expect(capturedNormParams).not.toBeNull();
+    // 仅前置缺失的 "neon glow"
+    expect(capturedNormParams.prompt).toBe('neon glow, synthwave street view');
+
+    const meta = capturedNormParams.workflowSnapshot?.requestMetadata;
+    expect(meta).toBeDefined();
+    expect(meta.promptTransform).toEqual({
+      prependedTriggerWords: 'neon glow',
+      originalPrompt: 'synthwave street view',
+      finalPrompt: 'neon glow, synthwave street view',
+    });
+  });
+
+  it('onSendToImg2Video 衍生新帧时不注入 width: 832, height: 480, denoise: 1.0, seedControl', async () => {
     const frameWithImage: SpatialFrame = {
       id: 'frame-img-1',
       title: '已生成原图',
@@ -383,16 +631,17 @@ describe('M94: Spatial defaults and promptTransform auditability', () => {
     expect(videoFrame.params.videoProvider).toBeUndefined();
     expect(videoFrame.params.requireReferenceImage).toBe(true);
 
-    // Ensure width: 832, height: 480, denoise: 1.0 are NOT injected
+    // 断言被删字段不出现
     expect(videoFrame.params.width).toBeUndefined();
     expect(videoFrame.params.height).toBeUndefined();
     expect(videoFrame.params.denoise).toBeUndefined();
+    expect(videoFrame.params.seedControl).toBeUndefined();
   });
 
-  it('onSendToImg2Img 衍生新图生图分支时，不凭空兜底 steps/cfg/sampler/denoise/1024', async () => {
+  it('P2-3 无活动帧 Img2Img 测试：真正走 activeFrame?.params || {...} 兜底分支，不出现被删字段', async () => {
     const frameWithImage: SpatialFrame = {
-      id: 'frame-img-2',
-      title: '已生成原图2',
+      id: 'frame-to-delete',
+      title: '临时帧',
       pos: { x: 100, y: 100 },
       width: 480,
       height: 480,
@@ -427,13 +676,26 @@ describe('M94: Spatial defaults and promptTransform auditability', () => {
       root!.render(React.createElement(App));
     });
 
+    // 1. 点击图片缩略图，打开 ImageDetailModal (此时 inspectingMediaItem 已填充)
     const imgEl = document.querySelector('img[src="https://example.com/street.png"]') as HTMLImageElement;
     expect(imgEl).toBeDefined();
-
     await act(async () => {
       imgEl.click();
     });
 
+    // 2. 在 ImageDetailModal 开启状态下，删除画布上唯一的取景框
+    const deleteFrameBtn = document.querySelector('button[title="删除选区框"]') as HTMLButtonElement;
+    expect(deleteFrameBtn).toBeDefined();
+    await act(async () => {
+      deleteFrameBtn.click();
+    });
+
+    // 验证此时画布上已无任何空间画板 (spatialFrames = [])，activeFrame 为 undefined
+    const boardsAfterDelete = JSON.parse(localStorage.getItem(BOARDS_KEY)!);
+    const spatialBoard = boardsAfterDelete.find((b: any) => b.id === 'board-spatial');
+    expect(spatialBoard.spatialFrames.length).toBe(0);
+
+    // 3. 点击「发送到图生图 (Img2Img)」，此时必然触发 activeFrame?.params || {...} 兜底分支
     const sendToImg2ImgBtn = Array.from(document.querySelectorAll('button')).find((b) =>
       b.textContent?.includes('发送到图生图')
     ) as HTMLButtonElement;
@@ -443,20 +705,31 @@ describe('M94: Spatial defaults and promptTransform auditability', () => {
       sendToImg2ImgBtn.click();
     });
 
+    // 4. 断言兜底分支创建的衍生分支
     const rawBoards = localStorage.getItem(BOARDS_KEY);
     const boards = JSON.parse(rawBoards!);
     const board = boards.find((b: any) => b.id === 'board-spatial');
-    expect(board.spatialFrames.length).toBe(2);
+    expect(board.spatialFrames.length).toBe(1);
 
-    const derivedFrame: SpatialFrame = board.spatialFrames.find((f: any) => f.title.includes('图生图衍生分支'));
+    const derivedFrame: SpatialFrame = board.spatialFrames[0];
     expect(derivedFrame).toBeDefined();
+    expect(derivedFrame.title).toContain('图生图衍生分支');
     expect(derivedFrame.referenceImageUrl).toBe('https://example.com/street.png');
-    // Sampling parameters must not be fabricated
+
+    // 严格断言：只保留未配置的诚实初始状态，所有被删硬编码字段均不存在
+    expect(derivedFrame.params.checkpoint).toBe('');
+    expect(derivedFrame.params.targetProvider).toBe('');
+    expect(derivedFrame.params.loras).toEqual([]);
+
+    expect(derivedFrame.params.seed).toBeUndefined();
+    expect(derivedFrame.params.seedControl).toBeUndefined();
     expect(derivedFrame.params.steps).toBeUndefined();
     expect(derivedFrame.params.cfg).toBeUndefined();
     expect(derivedFrame.params.sampler).toBeUndefined();
     expect(derivedFrame.params.scheduler).toBeUndefined();
+    expect(derivedFrame.params.denoise).toBeUndefined();
     expect(derivedFrame.params.width).toBeUndefined();
     expect(derivedFrame.params.height).toBeUndefined();
+    expect(derivedFrame.params.batchSize).toBeUndefined();
   });
 });
