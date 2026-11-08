@@ -539,6 +539,9 @@ interface GeneratedItem {
 }
 
 // Helper methods to read/write JSON files safely
+// A file that exists but does not parse is never silently replaced: the corrupt copy is kept
+// beside it and the caller skips the "seed empty file" write (see HISTORY/SETTINGS init below).
+const corruptJsonFiles = new Set<string>();
 const readJsonFile = <T>(filePath: string, fallback: T): T => {
   try {
     if (fs.existsSync(filePath)) {
@@ -547,6 +550,15 @@ const readJsonFile = <T>(filePath: string, fallback: T): T => {
     }
   } catch (err) {
     console.error(`Error reading ${filePath}:`, err);
+    try {
+      const backup = `${filePath}.corrupt-${Date.now()}.bak`;
+      fs.copyFileSync(filePath, backup);
+      corruptJsonFiles.add(filePath);
+      console.error(`[storage] 损坏文件已备份为 ${backup}；不会用空数据覆盖 ${filePath}`);
+    } catch (backupErr) {
+      console.error(`[storage] 损坏文件备份失败 ${filePath}:`, backupErr);
+      throw storageError(backupErr);
+    }
   }
   return fallback;
 };
@@ -957,6 +969,9 @@ const recordHistoryItem = async (rawItem: Partial<GeneratedItem>): Promise<Gener
     width: typeof item.width === 'number' ? item.width : null,
     height: typeof item.height === 'number' ? item.height : null,
     loras: Array.isArray(item.loras) ? item.loras : [],
+    // Video outputs are stored under the same durable /api/media URL; keep mediaType/videoUrl truthful.
+    mediaType: item.mediaType === 'video' ? 'video' : (typeof item.mediaType === 'string' && item.mediaType ? item.mediaType : undefined),
+    ...(item.mediaType === 'video' ? {videoUrl: typeof item.videoUrl === 'string' && item.videoUrl ? item.videoUrl : (item.url || undefined)} : (item.videoUrl ? {videoUrl: item.videoUrl} : {})),
   });
   const nextHistory = [fullItem,...generationHistory].slice(0,MAX_HISTORY_COUNT);
   writeJsonFile(HISTORY_FILE,nextHistory);
@@ -973,7 +988,11 @@ async function respondWithGeneratedImages(
   metadata: Partial<GeneratedItem> & Record<string, any>,
   options: { label: string; outputFormat?: string; response?: Record<string, unknown> },
 ) {
-  const result = await persistGeneratedImages(images, metadata, {persist: requireDurableHistoryMediaUrl, record: recordHistoryItem}, {outputFormat: options.outputFormat});
+  // Video tasks go through the same durable-output path; history and the response must keep
+  // the real media kind instead of labelling every output "image".
+  const isVideo = metadata.isVideo === true || (metadata.requestMetadata?.requestedParameters as any)?.isVideo === true;
+  const historyMetadata = isVideo ? {...metadata, mediaType: 'video'} : metadata;
+  const result = await persistGeneratedImages(images, historyMetadata, {persist: requireDurableHistoryMediaUrl, record: recordHistoryItem}, {outputFormat: options.outputFormat});
   if (!result.first) {
     const failure = result.transientOutputs[0];
     const status = failure?.stage === 'response' ? 502 : failure?.errorSource === 'storage' || failure?.errorSource === 'local' ? 500 : 502;
@@ -991,7 +1010,8 @@ async function respondWithGeneratedImages(
     ...options.response,
     imageUrl: result.first.url,
     mediaUrl: result.first.url,
-    mediaType: 'image',
+    mediaType: isVideo ? 'video' : 'image',
+    ...(isVideo ? {videoUrl: result.first.url} : {}),
     historyItem: result.first,
     historyItems: result.historyItems,
     transientOutputs: result.transientOutputs,
@@ -1005,14 +1025,15 @@ async function recordAdditionalImages(images: any[], first: GeneratedItem, optio
   return {historyItems: [first, ...rest.historyItems], transientOutputs: rest.transientOutputs, ...(rest.historyWarning ? {historyWarning: rest.historyWarning} : {})};
 }
 
-// Seed initial history if empty so user has starting history items
-if (generationHistory.length === 0) {
+// Seed initial history if empty so user has starting history items.
+// A corrupt file was already backed up by readJsonFile — never replace it with [].
+if (generationHistory.length === 0 && !corruptJsonFiles.has(HISTORY_FILE)) {
   generationHistory = [];
   writeJsonFile(HISTORY_FILE, generationHistory);
 }
 
-// Initialize cloud settings empty if not exists
-if (!cloudSettings || Object.keys(cloudSettings).length === 0) {
+// Initialize cloud settings empty if not exists (same corrupt-file guard)
+if ((!cloudSettings || Object.keys(cloudSettings).length === 0) && !corruptJsonFiles.has(SETTINGS_FILE)) {
   cloudSettings = {};
   writeJsonFile(SETTINGS_FILE, cloudSettings);
 }
@@ -3282,6 +3303,7 @@ registerVideoGenerateRoutes(app, {
   recordHistoryItem,
   requireDurableHistoryMediaUrl,
   generationContext,
+  resolveTamsModelApiOrigin,
 });
 
 
@@ -3664,14 +3686,52 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
         }
         completedMediaUrl = durableVideoUrl;
 
+        // History records only what was actually sent (videoInput is the schema-mapped payload).
+        const sentLoras = (() => {
+          const raw = videoInput.loras ?? loras;
+          if (Array.isArray(raw)) {
+            return raw.map((entry: any) => ({
+              name: String(entry?.air ?? entry?.name ?? entry?.loraModel ?? entry),
+              strength: typeof entry?.strength === 'number' ? entry.strength : (typeof entry?.weight === 'number' ? entry.weight : null),
+            }));
+          }
+          if (raw && typeof raw === 'object') {
+            return Object.entries(raw).map(([name, strength]) => ({
+              name,
+              strength: typeof strength === 'number' ? strength : null,
+            }));
+          }
+          return [];
+        })();
         const item = await recordHistoryItem({
           url: completedMediaUrl,
           prompt,
+          negativePrompt: typeof videoInput.negativePrompt === 'string'
+            ? videoInput.negativePrompt
+            : typeof videoInput.negative_prompt === 'string'
+              ? videoInput.negative_prompt
+              : (isProvided(negative_prompt) ? negative_prompt : null),
           provider: usedProvider,
           model,
           seed: isProvided(seed) ? Number(seed) : null,
-          steps: null,
-          cfg: null,
+          steps: typeof videoInput.steps === 'number'
+            ? videoInput.steps
+            : typeof videoInput.numInferenceSteps === 'number'
+              ? videoInput.numInferenceSteps
+              : null,
+          cfg: typeof videoInput.cfgScale === 'number'
+            ? videoInput.cfgScale
+            : typeof videoInput.guidanceScale === 'number'
+              ? videoInput.guidanceScale
+              : typeof videoInput.cfg === 'number'
+                ? videoInput.cfg
+                : null,
+          width: typeof videoInput.width === 'number' ? videoInput.width : (isProvided(width) && Number.isFinite(Number(width)) ? Number(width) : null),
+          height: typeof videoInput.height === 'number' ? videoInput.height : (isProvided(height) && Number.isFinite(Number(height)) ? Number(height) : null),
+          loras: sentLoras,
+          mediaType: 'video',
+          videoUrl: completedMediaUrl,
+          requestMetadata: videoRequestMetadata,
         });
 
         return res.json({
@@ -5504,8 +5564,6 @@ interface SingleKeyTestResult {
   message: string;
 }
 
-const NO_READONLY_TEST = '该服务商没有只读测试接口';
-
 // S6: key tests may only hit read-only account / auth / model-list endpoints — never generation or chat.
 async function testSingleProviderKey(
   provider: string,
@@ -5517,7 +5575,7 @@ async function testSingleProviderKey(
   const prov = provider.toLowerCase().trim();
 
   try {
-    if (['muapi','wavespeed','sogni','krea','together','aimlapi','novita','venice'].includes(prov)) {
+    if (['muapi','wavespeed','sogni','krea','together','aimlapi','novita','venice','deepinfra'].includes(prov)) {
       const urls:Record<string,string>={muapi:'https://api.muapi.ai/api/v1/models',wavespeed:'https://api.wavespeed.ai/api/v3/models',sogni:'https://api.sogni.ai/v1/creative-agent/workflows?limit=1',krea:'https://api.krea.ai/styles?limit=1',together:'https://api.together.ai/v1/models',aimlapi:'https://api.aimlapi.com/v2/billing/detail',novita:'https://api.novita.ai/openapi/v1/billing/balance/detail',venice:'https://api.venice.ai/api/v1/models?type=image',deepinfra:'https://api.deepinfra.com/v1/me'};
       const resp=await upstreamFetch({provider:prov,route:routePath,key:singleKey},urls[prov],{headers:prov==='muapi'?{'x-api-key':singleKey}:{Authorization:`Bearer ${singleKey}`}});
       const raw=await resp.text();
@@ -5762,12 +5820,98 @@ async function testSingleProviderKey(
       };
     }
 
-    if (prov === 'runware' || prov === 'modelslab') {
+    // Mage: GET /v1/account returns the Gems balance (docs.mage.space/api/endpoints/get-account).
+    if (prov === 'mage') {
+      if (!singleKey) {
+        return { maskedKey, status: 'error', latency: 0, message: '未配置 Mage API 密钥' };
+      }
+      const { baseUrl, error: urlErr } = getProviderBaseUrl('mage');
+      if (urlErr) {
+        return { maskedKey, status: 'error', latency: 0, message: urlErr };
+      }
+      const accountUrl = `${baseUrl.replace(/\/v1$/i, '')}/v1/account`;
+      const resp = await upstreamFetch(
+        { provider: 'mage', route: routePath, model: 'account', key: singleKey },
+        accountUrl,
+        { headers: { Authorization: `Bearer ${singleKey}`, Accept: 'application/json' } }
+      );
+      const latency = Date.now() - startTime;
+      const raw = await resp.text().catch(() => '');
+      if (!resp.ok) {
+        return {
+          maskedKey,
+          status: resp.status === 429 ? 'rate_limited' : 'error',
+          latency,
+          message: `Mage 鉴权失败 [${resp.status}] GET ${accountUrl}: ${raw.slice(0, 200)}`,
+        };
+      }
+      let gems: unknown;
+      try { gems = JSON.parse(raw)?.balance?.gems; } catch { /* raw below */ }
       return {
         maskedKey,
-        status: 'unsupported',
-        latency: 0,
-        message: `${NO_READONLY_TEST}（官方仅提供生成任务端点，无独立只读鉴权探针）`,
+        status: 'ok',
+        latency,
+        message: `Mage 认证成功${gems !== undefined ? `，Gems 余额 ${gems}` : ''}（GET ${accountUrl}）`,
+      };
+    }
+
+    // Runware: POST modelSearch is a read-only catalog call (runware.ai/docs/models-api/model-search).
+    if (prov === 'runware') {
+      if (!singleKey) {
+        return { maskedKey, status: 'error', latency: 0, message: '未配置 Runware API 密钥' };
+      }
+      const { baseUrl, error: urlErr } = getProviderBaseUrl('runware');
+      if (urlErr) {
+        return { maskedKey, status: 'error', latency: 0, message: urlErr };
+      }
+      const searchTask = [{ taskType: 'modelSearch', taskUUID: crypto.randomUUID(), search: 'flux', limit: 1 }];
+      const resp = await upstreamFetch(
+        { provider: 'runware', route: routePath, model: 'modelSearch', key: singleKey },
+        baseUrl,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${singleKey}` },
+          body: JSON.stringify(searchTask),
+        }
+      );
+      const latency = Date.now() - startTime;
+      const raw = await resp.text().catch(() => '');
+      return {
+        maskedKey,
+        status: resp.ok ? 'ok' : resp.status === 429 ? 'rate_limited' : 'error',
+        latency,
+        message: `Runware modelSearch 只读探针 HTTP ${resp.status} · ${baseUrl}${resp.ok ? '' : ` · 原始响应：${raw.slice(0, 200)}`}`,
+      };
+    }
+
+    // ModelsLab: POST /api/v4/dreambooth/model_list is a read-only public catalog (docs.modelslab.com/image-generation/model-operation/model-list).
+    if (prov === 'modelslab') {
+      if (!singleKey) {
+        return { maskedKey, status: 'error', latency: 0, message: '未配置 ModelsLab API 密钥' };
+      }
+      const { baseUrl, error: urlErr } = getProviderBaseUrl('modelslab');
+      if (urlErr) {
+        return { maskedKey, status: 'error', latency: 0, message: urlErr };
+      }
+      const listUrl = `${baseUrl}/api/v4/dreambooth/model_list`;
+      const resp = await upstreamFetch(
+        { provider: 'modelslab', route: routePath, model: 'dreambooth/model_list', key: singleKey },
+        listUrl,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: singleKey }),
+        }
+      );
+      const latency = Date.now() - startTime;
+      const raw = await resp.text().catch(() => '');
+      let modelCount: number | undefined;
+      try { const parsed = JSON.parse(raw); if (Array.isArray(parsed)) modelCount = parsed.length; } catch { /* raw below */ }
+      return {
+        maskedKey,
+        status: resp.ok ? 'ok' : resp.status === 429 ? 'rate_limited' : 'error',
+        latency,
+        message: `ModelsLab model_list 只读探针 HTTP ${resp.status} · ${listUrl}${resp.ok && modelCount !== undefined ? ` · ${modelCount} 个公开模型` : ''}${resp.ok ? '' : ` · 原始响应：${raw.slice(0, 200)}`}`,
       };
     }
 
@@ -5856,6 +6000,15 @@ app.get('/api/cloud-keys/stats', requireAdminAuth, (_req, res) => {
 });
 
 const VALID_STRATEGY_PROVIDERS = new Set([
+  'muapi',
+  'wavespeed',
+  'sogni',
+  'krea',
+  'together',
+  'aimlapi',
+  'novita',
+  'venice',
+  'deepinfra',
   'fal',
   'agnes',
   'sensenova',
@@ -5874,6 +6027,25 @@ const VALID_STRATEGY_PROVIDERS = new Set([
   'mage',
 ]);
 const VALID_STRATEGIES = new Set(['round_robin']);
+
+/** Novita GET /openapi/v1/billing/balance/detail returns strings in 1/10000 USD (docs.novita.ai/api-reference/basic-get-user-balance). */
+function novitaBalanceUsd(body: any): { usd?: number; error?: string } {
+  if (body?.availableBalance === undefined) {
+    return { error: `Novita 响应格式异常: ${JSON.stringify(body).slice(0, 150)}` };
+  }
+  const usd = Number(body.availableBalance) / 10000;
+  return Number.isFinite(usd) ? { usd } : { error: `Novita availableBalance 非数字: ${body.availableBalance}` };
+}
+
+/** Mage GET /v1/account returns { balance: { gems } } (docs.mage.space/api/endpoints/get-account). */
+function mageGemsBalance(body: any): { gems?: number; error?: string } {
+  const gems = body?.balance?.gems;
+  if (gems === undefined) {
+    return { error: `Mage 响应格式异常: ${JSON.stringify(body).slice(0, 150)}` };
+  }
+  const value = Number(gems);
+  return Number.isFinite(value) ? { gems: value } : { error: `Mage balance.gems 非数字: ${gems}` };
+}
 
 // Update Key Pool Strategy
 app.post('/api/cloud-keys/strategy', requireAdminAuth, (req, res) => {
@@ -6195,6 +6367,99 @@ app.post('/api/cloud-keys/balances', requireAdminAuth, checkSecFetchSite, async 
           }
         } catch (e: any) {
           balances.aimlapi = { status: 'error', detail: e.message };
+        }
+      }
+    })(),
+
+    // Novita AI — official balance detail endpoint, amounts in 1/10000 USD.
+    (async () => {
+      const novitaKey = keyPoolManager.getNextKey('novita');
+      if (!novitaKey) return;
+      const url = 'https://api.novita.ai/openapi/v1/billing/balance/detail';
+      try {
+        const resp = await upstreamFetch(
+          { provider: 'novita', route: '/api/cloud-keys/balances', model: 'billing/balance/detail', key: novitaKey },
+          url,
+          { headers: { Authorization: `Bearer ${novitaKey}`, Accept: 'application/json' } }
+        );
+        if (!resp.ok) {
+          const errBody = await resp.text().catch(() => '');
+          balances.novita = { status: 'error', detail: `Novita 状态码 [${resp.status}] ${url}: ${errBody.slice(0, 150)}` };
+          return;
+        }
+        const body = await resp.json().catch(() => ({}));
+        const parsed = novitaBalanceUsd(body);
+        balances.novita = parsed.usd !== undefined
+          ? { status: 'ok', detail: `Novita 余额: $${parsed.usd.toFixed(4)}（availableBalance ${body.availableBalance}，单位 1/10000 USD）`, amount: parsed.usd, raw: body }
+          : { status: 'error', detail: parsed.error || 'Novita 响应格式异常' };
+      } catch (e: any) {
+        balances.novita = { status: 'error', detail: e.message };
+      }
+    })(),
+
+    // Mage — GET /v1/account returns the Gems balance (1000 Gems = $1).
+    (async () => {
+      const mageKey = keyPoolManager.getNextKey('mage');
+      if (!mageKey) return;
+      const { baseUrl, error: urlErr } = getProviderBaseUrl('mage');
+      if (urlErr) {
+        balances.mage = { status: 'error', detail: urlErr };
+        return;
+      }
+      const url = `${baseUrl.replace(/\/v1$/i, '')}/v1/account`;
+      try {
+        const resp = await upstreamFetch(
+          { provider: 'mage', route: '/api/cloud-keys/balances', model: 'account', key: mageKey },
+          url,
+          { headers: { Authorization: `Bearer ${mageKey}`, Accept: 'application/json' } }
+        );
+        if (!resp.ok) {
+          const errBody = await resp.text().catch(() => '');
+          balances.mage = { status: 'error', detail: `Mage 状态码 [${resp.status}] ${url}: ${errBody.slice(0, 150)}` };
+          return;
+        }
+        const body = await resp.json().catch(() => ({}));
+        const parsed = mageGemsBalance(body);
+        balances.mage = parsed.gems !== undefined
+          ? { status: 'ok', detail: `Mage Gems 余额: ${parsed.gems}（1000 Gems = $1）`, amount: parsed.gems, raw: body }
+          : { status: 'error', detail: parsed.error || 'Mage 响应格式异常' };
+      } catch (e: any) {
+        balances.mage = { status: 'error', detail: e.message };
+      }
+    })(),
+
+    // Providers with a documented read-only catalog/auth endpoint but no verified balance API:
+    // the key is checked, and the result never claims a balance amount.
+    (async () => {
+      const probes: Array<[string, string]> = [
+        ['muapi', 'https://api.muapi.ai/api/v1/models'],
+        ['sogni', 'https://api.sogni.ai/v1/creative-agent/workflows?limit=1'],
+        ['krea', 'https://api.krea.ai/styles?limit=1'],
+        ['together', 'https://api.together.ai/v1/models'],
+        ['venice', 'https://api.venice.ai/api/v1/models?type=image'],
+        ['deepinfra', 'https://api.deepinfra.com/v1/me'],
+        ['replicate', 'https://api.replicate.com/v1/account'],
+      ];
+      for (const [prov, url] of probes) {
+        const key = keyPoolManager.getNextKey(prov);
+        if (!key) continue;
+        const headers: Record<string, string> = prov === 'muapi'
+          ? { 'x-api-key': key }
+          : { Authorization: `Bearer ${key}` };
+        try {
+          const resp = await upstreamFetch(
+            { provider: prov, route: '/api/cloud-keys/balances', model: 'read-only-probe', key },
+            url,
+            { headers }
+          );
+          if (resp.ok) {
+            balances[prov] = { status: 'unknown', detail: `key 可用（GET ${url}）；该服务商无已核实的余额接口，请用「测试连接」确认权限` };
+          } else {
+            const errBody = await resp.text().catch(() => '');
+            balances[prov] = { status: 'error', detail: `${prov} 状态码 [${resp.status}] ${url}: ${errBody.slice(0, 150)}` };
+          }
+        } catch (e: any) {
+          balances[prov] = { status: 'error', detail: `${prov}: ${e.message}` };
         }
       }
     })(),
@@ -6569,6 +6834,7 @@ const ALLOWED_SETTINGS_SECRET = new Set([
   'modelscopeAiToken',
   'nanogptKey',
   'tensorartKey',
+  'tensorartTamsToken',
   'geminiKey',
   'openaiCompatKey',
   'grokCompatKey',
@@ -6588,6 +6854,7 @@ const ALLOWED_SETTINGS_PLAIN = new Set([
   'replicateBaseUrl',
   'nanogptBaseUrl',
   'mageBaseUrl',
+  'tensorartBaseUrl',
 ]);
 
 const ALLOWED_SETTINGS = new Set([...ALLOWED_SETTINGS_SECRET, ...ALLOWED_SETTINGS_PLAIN]);

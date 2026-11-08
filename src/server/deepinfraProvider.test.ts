@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import {
   schemaProviders,
   deepinfraCatalogRows,
@@ -83,5 +84,18 @@ describe('DeepInfra submit mapping (unit)', () => {
     expect(payload).not.toHaveProperty('steps');
     expect(payload).not.toHaveProperty('cfg');
     expect(payload).not.toHaveProperty('loras');
+  });
+});
+
+describe('DeepInfra single-key probe routing (server.ts)', () => {
+  const serverSource = readFileSync(new URL('../../server.ts', import.meta.url), 'utf8');
+
+  it('includes deepinfra in the provider array that reaches the GET /v1/me probe', () => {
+    const start = serverSource.indexOf("if (['muapi','wavespeed','sogni','krea','together','aimlapi','novita','venice','deepinfra']");
+    const end = serverSource.indexOf('const urls:Record<string,string>=', start);
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    expect(serverSource.slice(start, end)).toContain("'deepinfra'");
+    expect(serverSource).toContain("deepinfra:'https://api.deepinfra.com/v1/me'");
   });
 });
