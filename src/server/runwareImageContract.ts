@@ -20,8 +20,8 @@ export interface RunwareTask {
   CFGScale?: number;
   seed?: number;
   numberResults?: number;
-  outputFormat?: 'PNG' | 'WEBP' | 'JPG';
-  outputType?: 'URL' | 'base64Data' | 'dataURI';
+  outputFormat?: unknown;
+  outputType?: unknown;
   scheduler?: string;
   lora?: RunwareLora[];
 }
@@ -30,6 +30,7 @@ export interface RunwareImageRequest {
   endpoint: string; // 'https://api.runware.ai/v1' or custom baseUrl
   payload: RunwareTask[];
   overrides: CustomOverride[];
+  mapping: Array<{ from: string; to: string; value: unknown; source: string }>;
   actualModel: string;
   unmappedLoras?: Array<{ item: unknown; reason: string }>;
 }
@@ -149,8 +150,9 @@ export function buildRunwareImageRequest(body: Record<string, unknown>, baseUrl 
   const taskUUID = typeof body.taskUUID === 'string' && body.taskUUID.trim() ? body.taskUUID.trim() : randomUUID();
 
   const rawNumResults = body.numberResults ?? body.num_images;
-  const rawFormat = String(body.outputFormat || body.output_format || 'PNG').trim().toUpperCase();
-  const rawType = String(body.outputType || body.output_type || 'URL').trim();
+  const filled = (value: unknown) => value !== undefined && value !== null && value !== '';
+  const formatSource = filled(body.outputFormat) ? 'outputFormat' : filled(body.output_format) ? 'output_format' : undefined;
+  const typeSource = filled(body.outputType) ? 'outputType' : filled(body.output_type) ? 'output_type' : undefined;
 
   const task: RunwareTask = {
     taskType: 'imageInference',
@@ -158,8 +160,8 @@ export function buildRunwareImageRequest(body: Record<string, unknown>, baseUrl 
     model,
     positivePrompt: prompt,
     numberResults: typeof rawNumResults === 'number' && Number.isFinite(rawNumResults) && rawNumResults > 0 ? Math.round(rawNumResults) : 1,
-    outputFormat: (['PNG', 'WEBP', 'JPG'].includes(rawFormat) ? rawFormat : 'PNG') as 'PNG' | 'WEBP' | 'JPG',
-    outputType: (['URL', 'base64Data', 'dataURI'].includes(rawType) ? rawType : 'URL') as 'URL' | 'base64Data' | 'dataURI',
+    outputFormat: formatSource ? body[formatSource] : 'PNG',
+    outputType: typeSource ? body[typeSource] : 'URL',
   };
 
   if (typeof body.negative_prompt === 'string' && body.negative_prompt.trim()) {
@@ -242,12 +244,16 @@ export function buildRunwareImageRequest(body: Record<string, unknown>, baseUrl 
     endpoint,
     payload: [sentTask],
     overrides: custom.overrides,
+    mapping: (['outputFormat', 'outputType'] as const).map(field => {
+      const source = custom.overrides.some(override => override.field === field) ? 'custom_parameters.' + field : (field === 'outputFormat' ? formatSource : typeSource) ?? 'project-default';
+      return { from: source, to: field, value: sentTask[field], source };
+    }),
     actualModel: String(sentTask.model),
     ...(unmappedLoras.length > 0 ? { unmappedLoras } : {}),
   };
 }
 
-export function parseRunwareImageResponse(response: RunwareImageResponse, outputFormat = 'PNG'): { imageUrl: string; imageUrls: string[]; images: Array<{ url: string; seed?: number }>; cost?: number; taskUUID: string } {
+export function parseRunwareImageResponse(response: RunwareImageResponse, outputFormat: unknown = 'PNG'): { imageUrl: string; imageUrls: string[]; images: Array<{ url: string; seed?: number }>; cost?: number; taskUUID: string } {
   if (Array.isArray(response.errors) && response.errors.length > 0) {
     const firstErr = response.errors[0];
     throw new Error(`Runware 上游错误: ${firstErr.message || firstErr.code || '未知错误'}`);
@@ -275,7 +281,7 @@ export type RunwareImageBodyInspection =
   | { kind: 'semantic-error' | 'protocol-error'; upstreamStatus: number; rawResponse: string; error: string; data?: RunwareImageResponse };
 
 /** Parse one received HTTP body while retaining its actual status and exact text for the caller. */
-export function inspectRunwareImageResponseBody(responseBody: string, upstreamStatus: number, outputFormat = 'PNG', secret?: string): RunwareImageBodyInspection {
+export function inspectRunwareImageResponseBody(responseBody: string, upstreamStatus: number, outputFormat: unknown = 'PNG', secret?: string): RunwareImageBodyInspection {
   const rawResponse = secret ? responseBody.split(secret).join('[credential redacted]') : responseBody;
   let data: RunwareImageResponse;
   try {
