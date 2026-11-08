@@ -441,10 +441,6 @@ async function buildCivitaiBaseInput(
     input[wireName] = numeric && Number.isFinite(Number(body[field])) ? Number(body[field]) : body[field];
   }
 
-  // Civitai official orchestration contract (recipes/sd1.md vs recipes/sdxl.md):
-  // Only SD1/SD1.5 (sdcpp and comfy) accepts clipSkip. SDXL explicitly rejects clipSkip with HTTP 400.
-  // Other ecosystem recipes (flux1, flux2, etc.) do not list clipSkip.
-  // Decision comes strictly from ecosystem/engine contract, never from model names.
   const snapshotClipSkip = (() => {
     const nodes = (body.workflowSnapshot as any)?.nodes;
     if (!Array.isArray(nodes)) return undefined;
@@ -455,11 +451,16 @@ async function buildCivitaiBaseInput(
     return undefined;
   })();
   const rawClipSkip = body.clipSkip ?? body.clip_skip ?? snapshotClipSkip;
-  const contractAcceptsClipSkip = (ecosystem === 'sd1' || ecosystem === 'sd15') && (engine === 'sdcpp' || engine === 'comfy') && 'clipSkip' in props;
-  if (contractAcceptsClipSkip && provided(rawClipSkip)) {
+  if (provided(rawClipSkip)) {
     const num = Number(rawClipSkip);
-    if (Number.isFinite(num)) {
-      input.clipSkip = Math.trunc(num);
+    const normalizedClipSkip = Number.isFinite(num) ? Math.trunc(num) : rawClipSkip;
+    input.clipSkip = normalizedClipSkip;
+    if (!('clipSkip' in props)) {
+      unmappedFields?.push({
+        field: 'clipSkip',
+        value: normalizedClipSkip,
+        reason: '未声明字段已原样透传：当前所选 Civitai imageGen Schema 未声明 clipSkip，已按 input.clipSkip 原样透传由上游裁决',
+      });
     }
   }
 

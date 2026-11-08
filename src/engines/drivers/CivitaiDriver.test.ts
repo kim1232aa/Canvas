@@ -30,7 +30,7 @@ describe('CivitaiDriver history provenance', () => {
     expect(()=>spatialRequestParameters({...frame,params:{...frame.params,customParameters:'[]'}})).toThrow(/JSON 对象/);
     expect(bodies).toHaveLength(1);
   });
-  it('forwards clipSkip for SD1.5 but excludes it for SDXL based on ecosystem contract', async () => {
+  it('forwards clipSkip across ecosystems (sd15, sdxl, flux1, non-AIR) without frontend ecosystem filtering, and omits it when not provided', async () => {
     const bodies: any[] = [];
     globalThis.fetch = vi.fn(async (_url, init) => {
       bodies.push(JSON.parse(String(init?.body)));
@@ -44,64 +44,49 @@ describe('CivitaiDriver history provenance', () => {
     }, {});
     expect(bodies[0].clipSkip).toBe(2);
 
-    // SDXL with clip_skip: must NOT send clipSkip
+    // SDXL with clip_skip: forwarded to backend without frontend ecosystem drop
     await new CivitaiDriver().generate({
       prompt: 'test',
       model: 'urn:air:sdxl:checkpoint:civitai:101055@128078',
       extraParams: { engine: 'comfy', ecosystem: 'sdxl', clip_skip: 2 },
     }, {});
-    expect(bodies[1]).not.toHaveProperty('clipSkip');
+    expect(bodies[1].clipSkip).toBe(2);
 
-    // From workflowSnapshot on SD1.5
+    // Flux1 with clipSkip: forwarded to backend without frontend ecosystem drop
     await new CivitaiDriver().generate({
       prompt: 'test',
-      model: 'urn:air:sd1:checkpoint:civitai:4384@128713',
+      model: 'urn:air:flux1:checkpoint:civitai:1@2',
+      extraParams: { engine: 'comfy', ecosystem: 'flux1', clipSkip: 2.9 },
+    }, {});
+    expect(bodies[2].clipSkip).toBe(2);
+
+    // From workflowSnapshot on non-SD1.5 (SDXL)
+    await new CivitaiDriver().generate({
+      prompt: 'test',
+      model: 'urn:air:sdxl:checkpoint:civitai:101055@128078',
       workflowSnapshot: {
         nodes: [
           { id: 'n1', type: 'KSampler', values: { clip_skip: 2 } },
         ],
       },
     }, {});
-    expect(bodies[2].clipSkip).toBe(2);
+    expect(bodies[3].clipSkip).toBe(2);
 
-    // P2-2: no ecosystem, model is not an AIR URN, with clip_skip -> must NOT attach clipSkip
+    // Non-AIR model ID with clip_skip: forwarded to backend
     await new CivitaiDriver().generate({
       prompt: 'test',
       model: '12345@67890',
       extraParams: { clip_skip: 2 },
     }, {});
-    expect(bodies[3]).not.toHaveProperty('clipSkip');
+    expect(bodies[4].clipSkip).toBe(2);
 
-    // P1-1: empty ecosystem (eco === '') with clip_skip -> must NOT attach clipSkip under allow-list
+    // Unset clipSkip -> not fabricated in payload
     await new CivitaiDriver().generate({
       prompt: 'test',
-      model: 'urn:air:',
-      extraParams: { clip_skip: 2 },
-    }, {});
-    expect(bodies[4]).not.toHaveProperty('clipSkip');
-
-    await new CivitaiDriver().generate({
-      prompt: 'test',
-      model: 'air:',
-      extraParams: { clip_skip: 2 },
+      model: 'urn:air:sdxl:checkpoint:civitai:101055@128078',
+      extraParams: { engine: 'comfy', ecosystem: 'sdxl' },
     }, {});
     expect(bodies[5]).not.toHaveProperty('clipSkip');
-
-    // Positive case: explicit ecosystem sd1 with non-AIR model -> DOES attach clipSkip
-    await new CivitaiDriver().generate({
-      prompt: 'test',
-      model: '12345@67890',
-      extraParams: { ecosystem: 'sd1', clip_skip: 2 },
-    }, {});
-    expect(bodies[6].clipSkip).toBe(2);
-
-    // Positive case: sd15 AIR URN -> DOES attach clipSkip
-    await new CivitaiDriver().generate({
-      prompt: 'test',
-      model: 'urn:air:sd15:checkpoint:civitai:4384@128713',
-      extraParams: { clip_skip: 2 },
-    }, {});
-    expect(bodies[7].clipSkip).toBe(2);
   });
   const originalFetch = globalThis.fetch;
   const originalSetTimeout = globalThis.setTimeout;
