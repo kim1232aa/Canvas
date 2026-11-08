@@ -396,10 +396,24 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
           });
         }
         const tools: any[] = Array.isArray(listData.data?.tools) ? listData.data.tools : [];
-        const targetTool = tools.find((t: any) => t?.name === targetToolName) || { name: targetToolName, inputs: [] };
-        const toolInputs: any[] = Array.isArray(targetTool.inputs) ? targetTool.inputs : [];
         const bodyInputs = req.body?.inputs;
-        const formattedInputs = Array.isArray(bodyInputs) && bodyInputs.length === toolInputs.length
+        const listedTool = tools.find((t: any) => t?.name === targetToolName);
+        const clientSuppliedInputs = Array.isArray(bodyInputs) && bodyInputs.length > 0;
+        if (!listedTool && !clientSuppliedInputs) {
+          const listedNames = tools.map((t: any) => t?.name).filter((n: any) => typeof n === 'string' && n);
+          return res.status(400).json({
+            error: `Tensor.Art OpenWorks 工具 "${targetToolName}" 不在上游 /tool/list 返回的工具列表中，且请求未提供非空 inputs 数组，无法构造 /task 入参，/task 未发出。上游实际返回的工具（${listedNames.length} 个）: ${listedNames.length ? listedNames.join(', ') : '（空列表）'}。`,
+            errorSource: 'local',
+            provider: 'tensorart',
+            model: targetToolName,
+            requestedTool: targetToolName,
+            availableTools: listedNames,
+            exactEndpointCalled: `${baseUrl}/tool/list`,
+          });
+        }
+        const targetTool = listedTool || { name: targetToolName, inputs: [] };
+        const toolInputs: any[] = Array.isArray(targetTool.inputs) ? targetTool.inputs : [];
+        const formattedInputs = !listedTool || (Array.isArray(bodyInputs) && bodyInputs.length === toolInputs.length)
           ? bodyInputs
           : toolInputs.map((inp: any) => {
               const desc = String(inp?.description || '').toLowerCase();
