@@ -377,11 +377,11 @@ describe('M108: AIVideoNode and cloud engine recommendation routing', { timeout:
 
     const falCandidate: CatalogCheckpointCandidate = {
       provider: 'fal', checkpoint: 'fal-ai/flux-lora',
-      baseModelMetadata: 'FLUX.1 D', baseModelSource: 'fal:base_model',
+      baseModelMetadata: 'FLUX.1 D', baseModelSource: 'civitai:baseModel',
     };
     await pair({
       name: 'fal lora', provider: 'civitai', triggerWords: '',
-      baseModel: 'Flux.1 D', baseModelSource: 'fal:base_model', checkpointCandidates: [falCandidate],
+      baseModel: 'Flux.1 D', baseModelSource: 'civitai:baseModel', checkpointCandidates: [falCandidate],
     });
 
     const graph = saved();
