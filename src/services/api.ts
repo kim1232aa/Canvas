@@ -244,22 +244,171 @@ export interface RefinePromptOptions {
   loras?: any[];
 }
 
-export const getRefineModelSelection = (): { provider?: string; model?: string } => {
+export interface RefineModelSelection {
+  provider?: string;
+  model?: string;
+}
+
+export interface RefineModelCapability {
+  provider: string;
+  label: string;
+  catalog: 'live' | 'manual';
+}
+
+export interface RefineModelOption {
+  provider: string;
+  model: string;
+  label: string;
+}
+
+export interface RefineModelCatalog {
+  providers: RefineModelCapability[];
+  options: RefineModelOption[];
+  errors: Array<{ provider: string; status?: number; message: string; raw?: string }>;
+}
+
+const refineSelectionListeners = new Set<(selection: RefineModelSelection) => void>();
+
+const normalizeRefineSelection = (provider?: unknown, model?: unknown): RefineModelSelection => {
+  const normalizedProvider = typeof provider === 'string' ? provider.trim() : '';
+  const normalizedModel = typeof model === 'string' ? model.trim() : '';
+  return normalizedProvider && normalizedModel
+    ? { provider: normalizedProvider, model: normalizedModel }
+    : {};
+};
+
+export const getRefineModelSelection = (): RefineModelSelection => {
   try {
-    const rawKeys = localStorage.getItem('comfycanvas_api_keys');
+    const rawKeys = localStorage.getItem(API_KEYS_STORAGE_KEY);
     if (rawKeys) {
       const parsed = JSON.parse(rawKeys);
-      if (parsed.refineModel && parsed.refineProvider) {
-        return { provider: parsed.refineProvider, model: parsed.refineModel };
-      }
+      const selected = normalizeRefineSelection(parsed?.refineProvider, parsed?.refineModel);
+      if (selected.provider && selected.model) return selected;
     }
-    const localProvider = localStorage.getItem('comfycanvas_refine_provider');
-    const localModel = localStorage.getItem('comfycanvas_refine_model');
-    if (localModel && localProvider) {
-      return { provider: localProvider, model: localModel };
-    }
+    const selected = normalizeRefineSelection(
+      localStorage.getItem('comfycanvas_refine_provider'),
+      localStorage.getItem('comfycanvas_refine_model'),
+    );
+    if (selected.provider && selected.model) return selected;
   } catch {}
   return {};
+};
+
+/** Persist the same explicit choice used by the node path and notify mounted editors in this tab. */
+export const saveRefineModelSelection = (provider?: string, model?: string): RefineModelSelection => {
+  const selected = normalizeRefineSelection(provider, model);
+  try {
+    const rawKeys = localStorage.getItem(API_KEYS_STORAGE_KEY);
+    const parsed = rawKeys ? JSON.parse(rawKeys) : {};
+    const next = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? { ...parsed } : {};
+    if (selected.provider && selected.model) {
+      next.refineProvider = selected.provider;
+      next.refineModel = selected.model;
+      localStorage.setItem('comfycanvas_refine_provider', selected.provider);
+      localStorage.setItem('comfycanvas_refine_model', selected.model);
+    } else {
+      delete next.refineProvider;
+      delete next.refineModel;
+      localStorage.removeItem('comfycanvas_refine_provider');
+      localStorage.removeItem('comfycanvas_refine_model');
+    }
+    localStorage.setItem(API_KEYS_STORAGE_KEY, JSON.stringify(next));
+  } catch (error) {
+    console.error('Error saving refine model selection:', error);
+  }
+  refineSelectionListeners.forEach((listener) => {
+    try { listener(selected); } catch { /* one editor must not break the others */ }
+  });
+  return selected;
+};
+
+export const subscribeRefineModelSelection = (listener: (selection: RefineModelSelection) => void) => {
+  refineSelectionListeners.add(listener);
+  return () => { refineSelectionListeners.delete(listener); };
+};
+
+const refineCatalogHeaders = (): Record<string, string> => {
+  const keys = getStoredApiKeys() as unknown as Record<string, string>;
+  const headers: Record<string, string> = {};
+  if (keys.geminiKey) headers['x-gemini-key'] = keys.geminiKey;
+  if (keys.sensenovaKey) headers['x-sensenova-key'] = keys.sensenovaKey;
+  if (keys.agnesKey) headers['x-agnes-key'] = keys.agnesKey;
+  return headers;
+};
+
+export const fetchRefineModelCapabilities = async (): Promise<RefineModelCapability[]> => {
+  const response = await fetch('/api/refine-prompt/capabilities', { headers: refineCatalogHeaders() });
+  if (!response.ok) throw await httpErrorFromResponse(response);
+  const body = await response.json();
+  return Array.isArray(body?.providers)
+    ? body.providers
+      .filter((provider: any) => provider && typeof provider.provider === 'string' && typeof provider.label === 'string' && (provider.catalog === 'live' || provider.catalog === 'manual'))
+      .map((provider: any) => ({ provider: provider.provider, label: provider.label, catalog: provider.catalog }))
+    : [];
+};
+
+export const fetchRefineModelCatalog = async (force = false): Promise<RefineModelCatalog> => {
+  const providers = await fetchRefineModelCapabilities();
+  const options: RefineModelOption[] = [];
+  const errors: RefineModelCatalog['errors'] = [];
+  const liveProviders = providers.filter((provider) => provider.catalog === 'live');
+  const liveResults = await Promise.all(liveProviders.map(async (provider) => {
+    try {
+      const catalog = await fetchLiveModelsShared(
+        force,
+        provider.provider,
+        '',
+        '',
+        'all',
+        'name_asc',
+        '',
+        1,
+        100,
+        '',
+        '',
+      );
+      return { provider: provider.provider, catalog };
+    } catch (error: any) {
+      return { provider: provider.provider, error };
+    }
+  }));
+  for (const result of liveResults) {
+    if ('error' in result) {
+      const error = result.error;
+      errors.push({
+        provider: result.provider,
+        status: typeof error?.status === 'number' ? error.status : undefined,
+        message: error?.message || String(error),
+        raw: typeof error?.rawResponse === 'string' ? error.rawResponse : undefined,
+      });
+      continue;
+    }
+    const rows = result.catalog[result.provider];
+    if (rows && !Array.isArray(rows) && typeof rows === 'object' && 'error' in rows) {
+      const entry = rows as Record<string, unknown>;
+      errors.push({
+        provider: result.provider,
+        status: typeof entry.status === 'number' ? entry.status : undefined,
+        message: String(entry.error || entry.details || '模型目录请求失败'),
+        raw: typeof entry.rawResponse === 'string' ? entry.rawResponse : undefined,
+      });
+      continue;
+    }
+    if (!Array.isArray(rows)) continue;
+    for (const row of rows) {
+      if (!row || typeof row !== 'object') continue;
+      const item = row as Record<string, unknown>;
+      const categories = [item.category, item.type].map((value) => String(value || '').trim().toLowerCase());
+      if (!categories.includes('reasoning')) continue;
+      const model = String(item.id || '').trim();
+      if (!model) continue;
+      const label = String(item.name || item.displayName || model).trim() || model;
+      if (!options.some((option) => option.provider === result.provider && option.model === model)) {
+        options.push({ provider: result.provider, model, label });
+      }
+    }
+  }
+  return { providers, options, errors };
 };
 
 export const refinePromptWithGemini = async (

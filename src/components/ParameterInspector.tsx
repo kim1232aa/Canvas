@@ -29,7 +29,15 @@ import {
 } from 'lucide-react';
 import { ComfyParameters } from '../types/graph';
 import { SAMPLER_OPTIONS, SCHEDULER_OPTIONS, NODE_DEFINITIONS } from '../constants/nodes';
-import { refinePromptWithGemini, getRefineModelSelection } from '../services/api';
+import {
+  fetchRefineModelCatalog,
+  getRefineModelSelection,
+  refinePromptWithGemini,
+  saveRefineModelSelection,
+  subscribeRefineModelSelection,
+  type RefineModelCatalog,
+  type RefineModelSelection,
+} from '../services/api';
 import { validateLoraCompatibility } from '../utils/baseModelMatcher';
 import { isLoraUnsupportedOnEndpoint, toSchemaProvider, LORA_UNSUPPORTED_TITLE } from '../utils/resolveCheckpoint';
 import { normalizeForComfyUI } from '../utils/engineParameterNormalizer';
@@ -300,6 +308,123 @@ function OptionalNumberRange({ label, value, min, max, step, integer, onCommit }
   );
 }
 
+export function RefineModelPicker({
+  onSelectionChange,
+}: {
+  onSelectionChange?: (selection: RefineModelSelection) => void;
+}) {
+  const [selection, setSelection] = React.useState<RefineModelSelection>(() => getRefineModelSelection());
+  const [catalog, setCatalog] = React.useState<RefineModelCatalog>({ providers: [], options: [], errors: [] });
+  const [catalogError, setCatalogError] = React.useState<string | null>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const unsubscribe = subscribeRefineModelSelection(setSelection);
+    return () => { unsubscribe(); };
+  }, []);
+  React.useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === 'comfycanvas_api_keys' || event.key?.startsWith('comfycanvas_refine_')) {
+        setSelection(getRefineModelSelection());
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+  React.useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
+    setCatalogError(null);
+    fetchRefineModelCatalog()
+      .then((result) => {
+        if (!cancelled) {
+          setCatalog(result);
+          setSelection((current) => result.providers.some((provider) => provider.provider === current.provider) ? current : {});
+        }
+      })
+      .catch((error: any) => {
+        if (!cancelled) setCatalogError(error?.message || String(error));
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const providerOptions = catalog.providers.map((provider) => provider.provider);
+  const selectedCapability = catalog.providers.find((provider) => provider.provider === selection.provider);
+  const modelOptions = catalog.options.filter((option) => option.provider === selection.provider);
+  const isManualModel = selectedCapability?.catalog === 'manual';
+  if (!isManualModel && selection.provider && selection.model && !modelOptions.some((option) => option.model === selection.model)) {
+    modelOptions.push({ provider: selection.provider, model: selection.model, label: `[当前] ${selection.model}` });
+  }
+  const commit = (next: RefineModelSelection) => {
+    const saved = saveRefineModelSelection(next.provider, next.model);
+    const visible = next.provider && !next.model ? { provider: next.provider } : saved;
+    setSelection(visible);
+    onSelectionChange?.(saved);
+  };
+  const hasCatalogFailure = Boolean(catalogError || catalog.errors.length);
+  const hasConfiguredProvider = catalog.providers.length > 0;
+
+  return (
+    <div className="rounded-lg border border-cyan-900/50 bg-cyan-950/15 p-2 space-y-1.5" data-testid="refine-model-picker">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] font-semibold text-cyan-200">AI 润色服务商与模型</span>
+        <span className="text-[9px] text-slate-500">仅显示服务端声明支持且已配置 Key 的服务商</span>
+      </div>
+      <div className="grid grid-cols-2 gap-1.5">
+        <select
+          aria-label="润色服务商"
+          value={selection.provider || ''}
+          onChange={(event) => commit({ provider: event.target.value, model: '' })}
+          className="w-full rounded border border-cyan-900/60 bg-[#111216] px-2 py-1.5 text-[10px] text-slate-200"
+          disabled={isLoading || (!providerOptions.length && !selection.provider)}
+        >
+          <option value="">请选择服务商</option>
+          {catalog.providers.map((provider) => <option key={provider.provider} value={provider.provider}>{provider.label}</option>)}
+        </select>
+        {isManualModel ? (
+          <input
+            aria-label="润色模型"
+            value={selection.model || ''}
+            onChange={(event) => commit({ provider: selection.provider, model: event.target.value })}
+            placeholder="手动填写模型 ID"
+            className="w-full rounded border border-cyan-900/60 bg-[#111216] px-2 py-1.5 text-[10px] text-slate-200"
+            disabled={isLoading || !selection.provider}
+          />
+        ) : (
+          <select
+            aria-label="润色模型"
+            value={selection.model || ''}
+            onChange={(event) => commit({ provider: selection.provider, model: event.target.value })}
+            className="w-full rounded border border-cyan-900/60 bg-[#111216] px-2 py-1.5 text-[10px] text-slate-200"
+            disabled={isLoading || !selection.provider}
+          >
+            <option value="">请选择模型</option>
+            {modelOptions.map((option) => <option key={`${option.provider}:${option.model}`} value={option.model}>{option.label}</option>)}
+          </select>
+        )}
+      </div>
+      {isLoading && <p className="text-[10px] text-slate-400" role="status">正在读取服务端声明与已配置服务商的实时模型…</p>}
+      {!isLoading && !hasConfiguredProvider && !hasCatalogFailure && (
+        <p className="text-[10px] leading-relaxed text-amber-200" role="status">没有可用的润色服务商：请先在 API 设置中配置支持润色的服务商 Key，然后重新打开此面板。</p>
+      )}
+      {isManualModel && <p className="text-[10px] leading-relaxed text-amber-200" role="status">该服务商没有公开模型目录，请手动填写模型 ID；输入值会原样发送。</p>}
+      {catalogError && <div role="alert" className="text-[10px] leading-relaxed text-rose-200"><pre className="max-h-24 overflow-auto whitespace-pre-wrap break-all font-mono">{catalogError}</pre></div>}
+      {catalog.errors.map((error) => (
+        <div key={`${error.provider}:${error.status || ''}`} role="alert" className="text-[10px] leading-relaxed text-rose-200">
+          {error.provider}{error.status ? ` · HTTP ${error.status}` : ''}：{error.message}
+          {error.raw && <pre className="mt-1 max-h-24 overflow-auto whitespace-pre-wrap break-all font-mono">{error.raw}</pre>}
+        </div>
+      ))}
+      {!isLoading && !selection.provider && !hasCatalogFailure && hasConfiguredProvider && (
+        <p className="text-[10px] leading-relaxed text-slate-400" role="status">请选择服务商和模型后再点击 AI 润色；不会自动切换服务商。</p>
+      )}
+    </div>
+  );
+}
+
 interface ParameterInspectorProps {
   params: ComfyParameters;
   onChange: (newParams: ComfyParameters) => void;
@@ -340,13 +465,15 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
   const [copiedComfyJson, setCopiedComfyJson] = React.useState(false);
   const [copiedTrigger, setCopiedTrigger] = React.useState<string | null>(null);
   const [isRefiningPrompt, setIsRefiningPrompt] = React.useState(false);
+  const [refineError, setRefineError] = React.useState<string | null>(null);
   const handleRefine = async () => {
     if (!positivePrompt || !onChangePositivePrompt) return;
     const selection = getRefineModelSelection();
-    const provider = (params as any).refineProvider || selection.provider;
-    const model = (params as any).refineModel || selection.model;
+    const provider = selection.provider;
+    const model = selection.model;
+    setRefineError(null);
     if (!provider || !model) {
-      alert('请先选择润色模型');
+      setRefineError('请先在下方选择润色服务商与模型；不会自动切换服务商。');
       return;
     }
     setIsRefiningPrompt(true);
@@ -356,12 +483,13 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
         model,
         loras: params.loras,
       });
-      if (refined) {
-        onChangePositivePrompt(refined);
-      }
+      if (refined) onChangePositivePrompt(refined);
     } catch (e: any) {
-      alert(e.message || '润色失败');
-      console.error(e);
+      const status = typeof e?.status === 'number' ? `HTTP ${e.status}` : '';
+      const raw = typeof e?.responseBody === 'string' && e.responseBody.trim()
+        ? e.responseBody
+        : e?.message || '润色失败';
+      setRefineError(`${status ? `润色失败（${status}）` : '润色失败'}：${raw}`);
     } finally {
       setIsRefiningPrompt(false);
     }
@@ -549,6 +677,21 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                     <span>{isRefiningPrompt ? 'AI 润色中...' : 'AI 润色'}</span>
                   </button>
                 </div>
+                <RefineModelPicker
+                  onSelectionChange={(selection) => {
+                    setRefineError(null);
+                    onChange({
+                      ...params,
+                      refineProvider: selection.provider || '',
+                      refineModel: selection.model || '',
+                    } as ComfyParameters);
+                  }}
+                />
+                {refineError && (
+                  <div role="alert" data-testid="refine-error" className="rounded border border-rose-900/60 bg-rose-950/30 p-2 text-[10px] leading-relaxed text-rose-200">
+                    <pre className="whitespace-pre-wrap break-all font-mono">{refineError}</pre>
+                  </div>
+                )}
                 <textarea
                   rows={3}
                   value={positivePrompt || ''}

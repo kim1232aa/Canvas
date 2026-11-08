@@ -556,3 +556,122 @@ describe('ParameterInspector unset values stay unset (mounted controlled compone
     expect(input('steps 滑块').getAttribute('aria-valuetext')).toBeNull();
   });
 });
+
+
+describe('ParameterInspector prompt refine controls', () => {
+  let host: HTMLDivElement;
+  let root: Root;
+  const prompt = 'a lighthouse above the foggy coast at dawn';
+  const mount = async (onChangePrompt = vi.fn()) => {
+    await act(async () => {
+      root.render(
+        <ParameterInspector
+          params={params()}
+          onChange={noop}
+          positivePrompt={prompt}
+          onChangePositivePrompt={onChangePrompt}
+          onOpenCivitai={noop}
+        />
+      );
+    });
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    return onChangePrompt;
+  };
+  const select = async (label: string, value: string) => {
+    const element = host.querySelector<HTMLSelectElement>(`select[aria-label="${label}"]`);
+    expect(element, label).not.toBeNull();
+    await act(async () => {
+      element!.value = value;
+      element!.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  };
+
+  beforeEach(() => {
+    localStorage.clear();
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    vi.stubGlobal('alert', vi.fn());
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+      if (String(url).includes('/api/refine-prompt/capabilities')) {
+        return new Response(JSON.stringify({ providers: [{ provider: 'gemini', label: 'Google Gemini', catalog: 'live' }] }), { status: 200 });
+      }
+      if (String(url).includes('/api/models?')) {
+        return new Response(JSON.stringify({ results: { gemini: [{ id: 'runtime-refine-model', name: 'Runtime Refine Model', category: 'reasoning', type: 'Reasoning' }] } }), { status: 200 });
+      }
+      if (String(url).includes('/api/gemini/refine-prompt')) {
+        return new Response(JSON.stringify({ refinedPrompt: 'A lighthouse rises above a misty coast at sunrise.' }), { status: 200 });
+      }
+      return new Response('{}', { status: 200 });
+    }));
+  });
+  afterEach(async () => {
+    await act(async () => root.unmount());
+    vi.unstubAllGlobals();
+  });
+
+  it('offers a clickable provider/model picker instead of a dead-end when nothing is selected', async () => {
+    await mount();
+    const refine = Array.from(host.querySelectorAll('button')).find((button) => button.textContent?.includes('AI 润色'));
+    expect(refine).toBeDefined();
+    await act(async () => { refine!.click(); });
+
+    expect(host.querySelector('[data-testid="refine-model-picker"]')).not.toBeNull();
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain('选择润色服务商与模型');
+    expect(host.querySelector('select[aria-label="润色服务商"]')).not.toBeNull();
+  });
+
+  it('selects a live model, refines the current prompt with that exact choice, and survives a remount', async () => {
+    let onChangePrompt = await mount();
+    await select('润色服务商', 'gemini');
+    await select('润色模型', 'runtime-refine-model');
+    const refine = Array.from(host.querySelectorAll('button')).find((button) => button.textContent?.includes('AI 润色'));
+    await act(async () => { refine!.click(); });
+
+    expect(onChangePrompt).toHaveBeenCalledWith('A lighthouse rises above a misty coast at sunrise.');
+    const post = (fetch as any).mock.calls.find(([url]: [string]) => String(url).includes('/api/gemini/refine-prompt'));
+    expect(JSON.parse(post[1].body)).toMatchObject({
+      prompt,
+      provider: 'gemini',
+      model: 'runtime-refine-model',
+    });
+
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    onChangePrompt = await mount();
+    expect(host.querySelector<HTMLSelectElement>('select[aria-label="润色服务商"]')?.value).toBe('gemini');
+    expect(host.querySelector<HTMLSelectElement>('select[aria-label="润色模型"]')?.value).toBe('runtime-refine-model');
+  });
+
+  it('does not offer a persisted provider after its configured key disappears', async () => {
+    localStorage.setItem('comfycanvas_refine_provider', 'gemini');
+    localStorage.setItem('comfycanvas_refine_model', 'runtime-refine-model');
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (String(url).includes('/api/refine-prompt/capabilities')) {
+        return new Response(JSON.stringify({ providers: [] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ results: {} }), { status: 200 });
+    }));
+    await mount();
+
+    expect(Array.from(host.querySelectorAll('select[aria-label="润色服务商"] option')).map((option) => option.value)).toEqual(['']);
+    expect(host.textContent).toContain('没有可用的润色服务商');
+  });
+
+  it('shows the exact upstream HTTP status and response text inline on failure', async () => {
+    await mount();
+    await select('润色服务商', 'gemini');
+    await select('润色模型', 'runtime-refine-model');
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (String(url).includes('/api/models?')) {
+        return new Response(JSON.stringify({ results: { gemini: [{ id: 'runtime-refine-model', name: 'Runtime Refine Model', category: 'reasoning', type: 'Reasoning' }] } }), { status: 200 });
+      }
+      return new Response('{"error":"upstream quota exhausted"}', { status: 503, statusText: 'Service Unavailable' });
+    }));
+    const refine = Array.from(host.querySelectorAll('button')).find((button) => button.textContent?.includes('AI 润色'));
+    await act(async () => { refine!.click(); });
+
+    expect(host.querySelector('[data-testid="refine-error"]')?.textContent).toContain('HTTP 503');
+    expect(host.querySelector('[data-testid="refine-error"]')?.textContent).toContain('{"error":"upstream quota exhausted"}');
+  });
+});

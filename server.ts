@@ -9,6 +9,7 @@ import { classifyCivitaiVideoPoll, runCivitaiVideoPoll } from './src/server/civi
 import { canvasNodeId, clearVideoJobStatus } from './src/server/videoJobStatus.ts';
 import { CIVITAI_VIDEO_POLL_BUDGET_MS, CIVITAI_VIDEO_SUBMIT_WAIT_SECONDS, civitaiGenerateSocketMs } from './src/server/civitaiVideoPollSchedule.ts';
 import { fetchSenseNovaModelCatalog } from './src/server/senseNovaCatalog.ts';
+import { getRefinePromptCapability, publicRefinePromptCapabilities, REFINE_PROMPT_CAPABILITIES } from './src/server/refinePromptCapabilities.ts';
 import { probeModelScopeKey, probeOpenAICompatModelsKey, probeTamsKey } from './src/server/keyTestProbes.ts';
 import { buildModelScopeImagePayload } from './src/server/modelScopeImageContract';
 import { MODELSCOPE_REGIONS, buildLoraListRequest, parseLoraListResponse } from './src/server/modelScopeLoraList.ts';
@@ -5385,7 +5386,14 @@ app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, re
   }
 });
 
-// Prompt Refiner endpoint (Gemini / SenseNova / Agnes) - explicit provider and model required (W3)
+app.get('/api/refine-prompt/capabilities', (req, res) => {
+  const configuredProviders = publicRefinePromptCapabilities((capability) =>
+    Boolean(req.headers[capability.keyHeader] || keyPoolManager.getKeys(capability.provider).length)
+  );
+  res.json({ providers: configuredProviders });
+});
+
+// Prompt Refiner endpoint: explicit provider and model required.
 app.post(['/api/gemini/refine-prompt', '/api/ai/refine-prompt'], async (req, res) => {
   try {
     const { prompt, provider, model, style, loras = [] } = req.body;
@@ -5401,6 +5409,13 @@ app.post(['/api/gemini/refine-prompt', '/api/ai/refine-prompt'], async (req, res
 
     const targetProvider = provider.toLowerCase().trim();
     const targetModel = model.trim();
+    const refineCapability = getRefinePromptCapability(targetProvider);
+    if (!refineCapability) {
+      return res.status(400).json({
+        error: `不支持的润色 provider: ${targetProvider}`,
+        supportedProviders: REFINE_PROMPT_CAPABILITIES.map(({ provider: id }) => id),
+      });
+    }
     const rawPrompt = prompt.trim();
     const loraContext = Array.isArray(loras) && loras.length > 0
       ? `Target LoRA triggers/styles: ${loras.map((l: any) => `${l.name || l.displayName}${(l.strength ?? l.modelStrength) != null ? ` (strength: ${l.strength ?? l.modelStrength})` : ''}`).join(', ')}`
@@ -5549,7 +5564,7 @@ Your task is to transform the user's initial prompt into an exceptional, visuall
       });
     }
 
-    return res.status(400).json({ error: `不支持的润色 provider: ${targetProvider}（仅支持 gemini, sensenova, agnes）` });
+    return res.status(500).json({ error: '润色能力声明与路由分支不一致' });
   } catch (error: any) {
     return res.status(500).json({ error: error.message || 'Prompt refinement failed' });
   }
