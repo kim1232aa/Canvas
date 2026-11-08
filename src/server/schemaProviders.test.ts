@@ -89,6 +89,90 @@ function json(body: unknown, status = 200): Response {
 }
 
 describe('LoRA submission transparency', () => {
+  const objectArray = { type: 'array', items: { type: 'object', properties: { path: { type: 'string' }, scale: { type: 'number' } } } };
+  async function submitLoras(properties: any, loras: any[], check: (status: number, data: any, sent: any[]) => void, body: any = {}) {
+    const sent: any[] = [];
+    await withFixture(async (_url, init) => {
+      if (init?.method === 'POST') { sent.push(JSON.parse(String(init.body))); return json({ data: { id: 'task' } }); }
+      return json({ data: [{ model_id: 'fixture/model', api_schema: { api_schemas: [{ type: 'model_run', method: 'POST', api_path: '/api/v3/fixture/model', server: 'https://api.wavespeed.ai', request_schema: { properties } }] } }] });
+    }, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/schema-provider/wavespeed/submit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'fixture/model', prompt: 'mountain valley in watercolor, panoramic composition', loras, ...body }) });
+      check(response.status, await response.json(), sent);
+    });
+  }
+  it.each([false, true])('keeps explicit default-target entries exactly once and in input order (mixed=%s)', async (mixed) => {
+    const loras = [{ target_field: 'loras', path: 'https://example.invalid/a', strength: 0.4 }, ...(mixed ? [{ path: 'https://example.invalid/b', strength: 0 }, { target_field: 'other_loras', path: 'https://example.invalid/c', strength: 0.8 }, { target_field: 'loras', path: 'https://example.invalid/d', strength: 0.6 }] : [])];
+    await submitLoras({ loras: objectArray, other_loras: objectArray }, loras, (status, data, sent) => {
+      expect(status).toBe(200);
+      expect(sent[0].loras).toEqual([{ path: 'https://example.invalid/a', scale: 0.4 }, ...(mixed ? [{ path: 'https://example.invalid/b', scale: 0 }, { path: 'https://example.invalid/d', scale: 0.6 }] : [])]);
+      if (mixed) expect(sent[0].other_loras).toEqual([{ path: 'https://example.invalid/c', scale: 0.8 }]);
+      expect(data.actualRequest.mapping.find((m: any) => m.to === 'loras').value).toEqual(sent[0].loras);
+    });
+  });
+  it('maps a string URL into the declared object item resource property', async () => {
+    await submitLoras({ loras: objectArray }, ['https://example.invalid/style.safetensors'], (status, _data, sent) => {
+      expect(status).toBe(200);
+      expect(sent[0].loras).toEqual([{ path: 'https://example.invalid/style.safetensors' }]);
+    });
+  });
+  it.each([0, 0.25])('preserves lora_strength=%s for unresolved candidates', async (strength) => {
+    await submitLoras({ loras: objectArray }, [{ name: 'foreign.safetensors', air: 'urn:air:flux1:lora:civitai:1@2', lora_strength: strength }], (status, _data, sent) => {
+      expect(status).toBe(200);
+      expect(sent[0].loras).toEqual([{ path: 'foreign.safetensors', scale: strength }]);
+    });
+  });
+  it.each(['lora_url', 'model_id'])('sends one explicitly targeted %s as its declared string shape', async (target) => {
+    await submitLoras({ [target]: { type: 'string' }, lora_weight: { type: 'number' } }, [{ target_field: target, path: 'https://example.invalid/style', lora_strength: 0 }], (status, _data, sent) => {
+      expect(status).toBe(200);
+      expect(sent[0][target]).toBe('https://example.invalid/style');
+      if (target === 'lora_url') expect(sent[0].lora_weight).toBe(0);
+    });
+  });
+  it.each([false, true])('rejects multiple LoRAs targeting a scalar without sending (explicit=%s)', async (explicit) => {
+    const loras = ['a', 'b'].map(name => ({ name, ...(explicit ? { target_field: 'lora_url' } : {}) }));
+    await submitLoras({ lora_url: { type: 'string' } }, loras, (status, data, sent) => {
+      expect(status).toBe(400);
+      expect(sent).toEqual([]);
+      expect(data.errorSource).toBe('local');
+      expect(data.error).toContain('lora_url');
+      expect(data.proposedRequest.mapping.flatMap((m: any) => m.unmappedLoras || [])).toHaveLength(2);
+    });
+  });
+  it.each([null, 12, false, [], {}, ''])('diagnoses invalid item %j and never submits a partial LoRA list', async (invalid) => {
+    await submitLoras({ loras: objectArray }, [{ path: 'https://example.invalid/valid', strength: 0.3 }, invalid], (status, data, sent) => {
+      expect(status).toBe(400);
+      expect(sent).toEqual([]);
+      expect(data.errorSource).toBe('local');
+      expect(data.proposedRequest.mapping.flatMap((m: any) => m.unmappedLoras || [])).toEqual(expect.arrayContaining([expect.objectContaining({ item: invalid, reason: expect.any(String) })]));
+    });
+  });
+  it('does not redirect an undeclared explicit target to the default array', async () => {
+    await submitLoras({ loras: objectArray }, [{ target_field: 'missing_loras', path: 'https://example.invalid/a' }], (status, data, sent) => {
+      expect(status).toBe(400);
+      expect(sent).toEqual([]);
+      expect(data.error).toContain('missing_loras');
+    });
+  });
+  it('preserves a declared scalar object target instead of wrapping it in an array', async () => {
+    await submitLoras({ adapter: objectArray.items }, [{ target_field: 'adapter', path: 'https://example.invalid/style', strength: 0 }], (status, _data, sent) => {
+      expect(status).toBe(200);
+      expect(sent[0].adapter).toEqual({ path: 'https://example.invalid/style', scale: 0 });
+    });
+  });
+  it('does not overwrite a filled scalar target with a LoRA', async () => {
+    await submitLoras({ model_id: { type: 'string' } }, [{ target_field: 'model_id', name: 'style' }], (status, data, sent) => {
+      expect(status).toBe(400);
+      expect(sent).toEqual([]);
+      expect(data.error).toContain('model_id');
+      expect(data.error).toContain('冲突');
+    }, { custom_parameters: { model_id: 'selected-model' } });
+  });
+  it('keeps a scalar LoRA and a separately targeted array with their own strengths', async () => {
+    await submitLoras({ lora_url: { type: 'string' }, lora_weight: { type: 'number' }, other_loras: objectArray }, [{ target_field: 'lora_url', path: 'https://example.invalid/a', lora_strength: 0 }, { target_field: 'other_loras', path: 'https://example.invalid/b', strength: 0.6 }], (status, _data, sent) => {
+      expect(status).toBe(200);
+      expect(sent[0]).toMatchObject({ lora_url: 'https://example.invalid/a', lora_weight: 0, other_loras: [{ path: 'https://example.invalid/b', scale: 0.6 }] });
+    });
+  });
   const lora = { name: 'foreign-style.safetensors', air: 'urn:air:flux1:lora:civitai:1@2', strength: 0.7 };
   it.each([
     { type: 'array', items: { type: 'string' } },

@@ -1816,112 +1816,63 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
         const unmappedLoras: Array<{ item: any; reason: string }> = [];
         const declaredTarget = (provider==='krea' ? ['styles'] : ['loras','lora_list','image_loras','lora_url','model_id']).find(k=>Object.hasOwn(props,k) && (k!=='model_id' || props[k]?.type==='array' || props[k]?.items || props[k]?.anyOf?.some((s:any)=>s?.type==='array')))
           || Object.keys(props).find(k=>/lora|styles/i.test(k) && (props[k]?.type==='array' || props[k]?.items || props[k]?.anyOf?.some((s:any)=>s?.type==='array')));
-        const explicitTargets = loras.map((l:any)=>String(l?.target_field || l?.targetField || l?.lora_field || '').trim());
-        if(!declaredTarget && !explicitTargets.every((field:string)=>field && Object.hasOwn(props,field))) {
-          for(const item of loras)unmappedLoras.push({item,reason:'当前模型 Schema 未声明可接收此 LoRA 的字段，未发送生成请求'});
-          mapping.push({from:'loras',to:null,requested:loras,unmappedLoras});
-          throw Object.assign(new Error('当前模型 Schema 未声明 LoRA 字段，未发送生成请求'),{status:400,errorSource:'local'});
-        }
-        if(provider==='sogni') {
-          const { ids, strengths } = sogniLoras(loras, unmappedLoras);
-          payload.loras = ids;
-          if (strengths.length > 0 || ids.length === 0) {
-            payload.loraStrengths = strengths;
+        const groups = new Map<string, any[]>();
+        const failures: Array<{ item: any; reason: string }> = [];
+        const reject = (item:any,reason:string) => { const entry={item,reason};unmappedLoras.push(entry);failures.push(entry); };
+        for(const item of loras) {
+          if((typeof item!=='string' && (typeof item!=='object' || item===null || Array.isArray(item))) || item==='') {
+            reject(item,'LoRA 项必须为非空标识字符串或资源对象');continue;
           }
-        }
-        else if(provider==='krea') {
-          // Official field: styles[{id,strength}] ("Styles (typically LoRAs)"). No styles field → refuse, never strip.
-          payload.styles=kreaStyles(loras, unmappedLoras);
-        }
-        else if(provider==='aimlapi') {
-          // Official: loras[{path,scale}] only when model OpenAPI declares it (Z-Image Turbo LoRA / Flux 2 LoRA).
-          payload.loras=aimlapiLoras(loras, unmappedLoras);
-        }
-        else if(provider==='novita') {
-          // Official V3: request.loras[{model_name,strength}] on SD async txt2img/img2img (and SDK txt2video). Ming OpenAI path has no loras.
-          payload.loras=novitaLoras(loras, unmappedLoras);
-        }
-        else {
-          const defaultTarget = declaredTarget!=='lora_url'?declaredTarget:undefined;
-          const targetedGroups = new Map<string, any[]>();
-          const defaultLoras: any[] = [];
-          for (const l of loras) {
-            const explicitField = String(l?.target_field || l?.targetField || l?.lora_field || '').trim();
-            if (explicitField) {
-              if (Object.hasOwn(props, explicitField)) {
-                if (!targetedGroups.has(explicitField)) targetedGroups.set(explicitField, []);
-                targetedGroups.get(explicitField)!.push(l);
-              } else {
-                unmappedLoras.push({
-                  item: l,
-                  reason: `所指定的 LoRA 目标字段 "${explicitField}" 未在当前模型 Schema 中声明`,
-                });
-              }
-            } else {
-              defaultLoras.push(l);
-            }
+          const target=String(item?.target_field || item?.targetField || item?.lora_field || '').trim() || declaredTarget;
+          if(!target || !Object.hasOwn(props,target)) {
+            reject(item,`当前模型 Schema 未声明 LoRA 目标字段 "${target || '(未指定)'}"`);continue;
           }
-
-          for (const [field, items] of targetedGroups) {
-            const arraySchema = props[field];
-            const itemSchema = arraySchema?.items || arraySchema?.anyOf?.find((x: any) => x.type === 'array')?.items || arraySchema?.anyOf?.find((x: any) => x?.items)?.items;
-            payload[field] = mapSchemaLoraItems(items, itemSchema, schemaProviders[provider], model, unmappedLoras);
-          }
-
-          if (defaultTarget) {
-            const arraySchema = props[defaultTarget];
-            const itemSchema = arraySchema?.items || arraySchema?.anyOf?.find((x: any) => x.type === 'array')?.items || arraySchema?.anyOf?.find((x: any) => x?.items)?.items;
-            payload[defaultTarget] = mapSchemaLoraItems(defaultLoras, itemSchema, schemaProviders[provider], model, unmappedLoras);
-          } else if (Object.hasOwn(props, 'lora_url') && defaultLoras.length === 1) {
-            const candidate = defaultLoras[0].downloadUrl || defaultLoras[0].url || (typeof defaultLoras[0].path === 'string' && /^https?:\/\//i.test(defaultLoras[0].path) ? defaultLoras[0].path : undefined);
-            if (candidate) {
-              payload.lora_url = candidate;
-              if (Object.hasOwn(props, 'lora_weight')) payload.lora_weight = defaultLoras[0].strength ?? defaultLoras[0].modelStrength ?? defaultLoras[0].scale ?? defaultLoras[0].weight;
-            } else {
-              unmappedLoras.push({ item: defaultLoras[0], reason: 'lora_url 需要有效直链 URL' });
-            }
-          } else if (defaultLoras.length) {
-            for(const item of defaultLoras)unmappedLoras.push({item,reason:'Schema 未声明可映射的 LoRA 数组字段'});
-          }
+          if(!groups.has(target))groups.set(target,[]);
+          groups.get(target)!.push(item);
         }
-        let loraMappingError: string | undefined;
-        for(const entry of unmappedLoras) {
-          const l=entry.item;
-          const explicit=String(l?.target_field || l?.targetField || l?.lora_field || '').trim();
-          const target=explicit && Object.hasOwn(props,explicit)?explicit:declaredTarget;
-          const candidate=typeof l==='string'?l:[l?.id,l?.name,l?.path,l?.url,l?.air,l?.downloadUrl,l?.lora_name,l?.civitaiId].find(v=>v!==undefined && v!==null && v!=='');
-          if(!target || candidate===undefined || candidate==='') {
-            entry.reason+='；没有可原样提交的候选标识或已声明字段';
-            loraMappingError=entry.reason;continue;
-          }
-          if(target==='lora_url') {
-            if(loras.length!==1){entry.reason+='；标量 lora_url 无法承载多个 LoRA';loraMappingError=entry.reason;continue;}
-            payload[target]=candidate;
-            if(Object.hasOwn(props,'lora_weight'))payload.lora_weight=l?.strength ?? l?.modelStrength ?? l?.scale ?? l?.weight;
+        for(const [target,items] of groups) {
+          const spec=props[target];
+          const variants=[spec,...(spec?.anyOf || []),...(spec?.oneOf || [])];
+          const arraySpec=variants.find((s:any)=>s?.type==='array' || s?.items || (Array.isArray(s?.type) && s.type.includes('array')));
+          const scalarSpec=variants.find((s:any)=>s?.type==='string' || s?.type==='object' || s?.properties);
+          const groupUnmappedStart=unmappedLoras.length;
+          if(Object.hasOwn(payload,target) || Object.hasOwn(custom,target) || target===definition.selectorField) {
+            for(const item of items)reject(item,`LoRA 目标字段 "${target}" 与已填写参数或模型选择器冲突，不能覆盖`);
+          } else if(!arraySpec && (!scalarSpec || items.length!==1)) {
+            for(const item of items)reject(item,`LoRA 目标字段 "${target}" 的 Schema 形态 ${spec?.type || '未知'} 无法完整承载 ${items.length} 个 LoRA`);
           } else {
-            const spec=props[target];
-            const itemSchema=spec?.items || spec?.anyOf?.find((x:any)=>x?.items)?.items;
-            const itemProps=itemSchema?.properties;
-            const documentedFields=(schemaProviders[provider] as any).loraItemFields;
-            const resourceKey=itemProps?['id','path','url','air','model','model_name','name'].find(k=>Object.hasOwn(itemProps,k)):documentedFields?.pathKey;
-            const strengthKey=itemProps?['scale','weight','strength','modelStrength','lora_strength'].find(k=>Object.hasOwn(itemProps,k)):documentedFields?.strengthKey;
-            const strength=l?.strength ?? l?.modelStrength ?? l?.scale ?? l?.weight;
-            const value=resourceKey?{[resourceKey]:candidate,...(strengthKey && strength!==undefined?{[strengthKey]:strength}:{})}:candidate;
-            if(!Array.isArray(payload[target]))payload[target]=[];
-            const index=loras.filter((item:any)=>{
-              const field=String(item?.target_field || item?.targetField || item?.lora_field || '').trim();
-              return (field && Object.hasOwn(props,field)?field:declaredTarget)===target;
-            }).indexOf(l);
-            payload[target].splice(index,0,value);
-            if(provider==='sogni' && (strength!==undefined || payload.loraStrengths?.length)) {
-              if(!Array.isArray(payload.loraStrengths))payload.loraStrengths=[];
-              payload.loraStrengths.splice(index,0,strength);
+            const itemSchema=arraySpec?arraySpec.items:scalarSpec;
+            const values:any[]=[];
+            const strengths=items.map(l=>l?.strength ?? l?.modelStrength ?? l?.scale ?? l?.weight ?? l?.lora_strength);
+            for(const l of items) {
+              const prior=unmappedLoras.length;
+              let value=mapSchemaLoraItems([l],itemSchema,schemaProviders[provider],model,unmappedLoras)[0];
+              if(value===undefined) {
+                const itemProps=itemSchema?.properties;
+                const documentedFields=(schemaProviders[provider] as any).loraItemFields;
+                const resourceKey=itemProps?['id','path','url','air','model','model_name','name'].find(k=>Object.hasOwn(itemProps,k)):documentedFields?.pathKey;
+                const strengthKey=itemProps?['scale','weight','strength','modelStrength','lora_strength'].find(k=>Object.hasOwn(itemProps,k)):documentedFields?.strengthKey;
+                const candidate=typeof l==='string'?l:[l?.[resourceKey],l?.id,l?.name,l?.path,l?.url,l?.air,l?.downloadUrl,l?.lora_name,l?.civitaiId].find(v=>(typeof v==='string' && v.trim()!=='') || typeof v==='number');
+                const strength=l?.strength ?? l?.modelStrength ?? l?.scale ?? l?.weight ?? l?.lora_strength;
+                if(candidate===undefined || candidate==='' || (!resourceKey && itemSchema?.type!=='string')) {
+                  reject(l,`LoRA 目标字段 "${target}" 缺少可提交的资源标识或 Schema 资源属性`);continue;
+                }
+                value=resourceKey?{[resourceKey]:candidate,...(strengthKey && strength!==undefined?{[strengthKey]:strength}:{})}:candidate;
+                if(unmappedLoras.length===prior)unmappedLoras.push({item:l,reason:'原始 LoRA 项需要按目标 Schema 形态映射'});
+                for(const entry of unmappedLoras.slice(prior))entry.reason+='；候选标识已原样提交到 '+target+'，由上游裁决';
+              }
+              values.push(value);
             }
+            payload[target]=arraySpec?values:values[0];
+            if(target==='loras' && Object.hasOwn(props,'loraStrengths') && strengths.some(v=>v!==undefined))payload.loraStrengths=strengths;
+            if(target==='lora_url' && Object.hasOwn(props,'lora_weight') && strengths[0]!==undefined)payload.lora_weight=strengths[0];
           }
-          entry.reason+='；候选标识已原样提交到 '+target+'，由上游裁决';
+          mapping.push({from:'loras',to:target,requested:items,value:payload[target],strengths:payload.loraStrengths,...(unmappedLoras.length>groupUnmappedStart?{unmappedLoras:unmappedLoras.slice(groupUnmappedStart)}:{}),note:'按已声明字段提交；生成成功不证明上游实际应用了 LoRA。'});
         }
-        mapping.push({from:'loras',to:provider==='sogni'?'loras + loraStrengths':provider==='krea'?'styles':Object.hasOwn(payload,'model_id')?'model_id':Object.hasOwn(payload,'image_loras')?'image_loras':Object.hasOwn(payload,'lora_list')?'lora_list':Object.hasOwn(payload,'lora_url')?'lora_url + lora_weight':declaredTarget || 'loras',requested:loras,value:payload.styles || payload.loras || payload.model_id || payload.image_loras || payload.lora_list || (declaredTarget?payload[declaredTarget]:undefined) || {url:payload.lora_url,weight:payload.lora_weight},strengths:payload.loraStrengths,...(unmappedLoras.length ? { unmappedLoras } : {}),...(provider==='sogni'?{capability:`Official ${definition.hostedToolName || sogniHostedToolName(definition.inputSchema) || 'hosted-tool'} schema: LoRA arrays are sent only when that live Schema declares them; MiniMax H3 video selectors accept loras, others ignore them`}:{}),note:provider==='sogni'?'按选择器与 LoRA ID 原样提交；兼容性及字段实际应用仍以 workflow 结果为准。':'仅记录已提交的 LoRA 参数；生成成功不证明上游实际应用了 LoRA。独立 CLIP 强度没有对应字段时不会假称生效。'});
-        if(loraMappingError)throw Object.assign(new Error('LoRA 无法完整提交：'+loraMappingError),{status:400,errorSource:'local'});
+        if(failures.length) {
+          mapping.push({from:'loras',to:null,requested:loras,unmappedLoras:failures.filter(entry=>!mapping.some(m=>m.unmappedLoras?.includes(entry)))});
+          throw Object.assign(new Error('LoRA 无法完整提交，未发送生成请求：'+failures.map(e=>e.reason).join('；')),{status:400,errorSource:'local'});
+        }
       }
       blockStage=undefined;
       // custom_parameters are scoped to the CURRENT model Schema: undeclared keys (e.g. left over from another provider/model) are not sent while Schema matching is on.
