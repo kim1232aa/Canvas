@@ -11,6 +11,17 @@ const oa = () => loadCivitaiImageGenOpenApi();
 const air = 'urn:air:sdxl:checkpoint:civitai:12@34';
 const api = (rows: Record<string, unknown>) => async (url: string) => new Response(JSON.stringify(rows[url.split('/').pop()!] ?? {}), { status: url.includes('model-versions') ? 200 : 404 });
 
+describe('Civitai image request keeps canvas UI metadata off the wire', () => {
+  it('drops root _canvas (incl. nsfwOmitted) from payload and keeps user custom fields verbatim', async () => {
+    const get = async () => { throw new Error('unexpected lookup'); };
+    const custom = { cfgScale: 2, _canvas: { scope: { provider: 'civitai', model: air }, schemaProperties: ['cfgScale'], nsfwOmitted: ['allowMatureContent'] } };
+    const built = await buildCivitaiImageRequest({ model: air, engine: 'comfy', prompt: 'a lighthouse at dusk', custom_parameters: custom }, get, oa());
+    expect(JSON.stringify(built.payload)).not.toMatch(/_canvas|nsfwOmitted/);
+    expect(built.payload).toMatchObject({ prompt: 'a lighthouse at dusk', cfgScale: 2, model: air });
+    expect(JSON.stringify(built.unmappedFields)).not.toMatch(/_canvas|nsfwOmitted/);
+  });
+});
+
 describe('Civitai resource identity', () => {
   it('resolves explicit JSON model override and records the actual resource', async () => {
     const actual = 'urn:air:sdxl:checkpoint:civitai:56@78';

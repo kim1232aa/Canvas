@@ -10,7 +10,9 @@ export class AgnesVideoRequestError extends Error { readonly status = 400; }
 export function buildAgnesVideoRequest(model: string, body: Record<string, unknown>) {
   const fail = (message: string): never => { throw new AgnesVideoRequestError(message); };
   if (Object.hasOwn(body, 'custom_parameters') && (!body.custom_parameters || typeof body.custom_parameters !== 'object' || Array.isArray(body.custom_parameters))) fail('custom_parameters 必须为 JSON 对象');
-  const custom = (body.custom_parameters ?? {}) as Record<string, unknown>;
+  // Root `_canvas` is canvas UI metadata (scope/schemaProperties/nsfwOmitted); it is never part of the provider request.
+  const customRecord = (body.custom_parameters ?? {}) as Record<string, unknown>;
+  const { _canvas: _meta, ...custom } = customRecord;
   for (const key of Object.keys(custom)) if (boundary.test(key)) fail(`custom_parameters 不可覆盖模型/路由/凭据边界: ${key}`);
   const map = (source: Record<string, unknown>) => {
     const result: Record<string, unknown> = {};
@@ -44,7 +46,7 @@ export function buildAgnesVideoRequest(model: string, body: Record<string, unkno
   }
   const overrides = Object.fromEntries(Object.entries(mappedCustom).filter(([key, value]) => Object.hasOwn(beforeCustom, key) && JSON.stringify(beforeCustom[key]) !== JSON.stringify(value)).map(([key, value]) => [key, { before: beforeCustom[key], after: value }]));
   const fieldStatus = Object.fromEntries(Object.keys(payload).map(key => [key, knownModel && officialFields.has(key) ? 'supported' : 'unverified']));
-  return { payload, beforeCustom, customParameters: { ...custom }, overrides, fieldStatus, requestedParameters: sanitizeGenerationMetadata(body) };
+  return { payload, beforeCustom, customParameters: { ...customRecord }, overrides, fieldStatus, requestedParameters: sanitizeGenerationMetadata(body) };
 }
 
 export function agnesVideoId(data: Record<string, unknown>): string {

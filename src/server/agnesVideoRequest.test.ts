@@ -19,6 +19,11 @@ describe('Agnes video advanced request contract', () => {
     expect(built.requestedParameters).toEqual(body);
     expect(built.fieldStatus.resolution).toBe('unverified');
   });
+  it('never sends root _canvas UI metadata (including nsfwOmitted); user fields stay verbatim', () => {
+    const built = buildAgnesVideoRequest(model, { prompt: 'a lighthouse at dusk', custom_parameters: { seed: 3, future_flag: false, _canvas: { scope: { provider: 'agnes', model }, schemaProperties: ['seed'], nsfwOmitted: ['safe_mode'] } } });
+    expect(JSON.stringify(built.payload)).not.toMatch(/_canvas|nsfwOmitted/);
+    expect(built.payload).toMatchObject({ model, prompt: 'a lighthouse at dusk', seed: 3, future_flag: false, mode: 'text' });
+  });
   it('requires object JSON and protects model/provider/endpoint/credentials and prototype boundaries', () => {
     for (const custom_parameters of [null, [], 'bad', { model: 'other' }, { provider: 'fal' }, { baseUrl: 'https://example.com' }, { apiKey: 'fixture' }, { headers: {} }, JSON.parse('{"__proto__":{"polluted":true}}')]) expect(() => buildAgnesVideoRequest(model, { custom_parameters })).toThrow(/对象|边界/);
   });

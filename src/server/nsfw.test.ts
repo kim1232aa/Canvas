@@ -10,9 +10,12 @@ import React from 'react';
 import { SchemaChoiceControls } from '../components/SchemaChoiceControls';
 import { CivitaiAllowMatureControl } from '../components/ParameterInspector';
 
-describe('NSFW permissive defaults (AGENTS.md #6): declared switches default to open with traceable docUrl, user override wins', () => {
-  it('fills declared safety switches with their verified permissive defaults and returns docUrl audit entries', () => {
-    const payload: Record<string, any> = { prompt: 'a red fox sitting on a stone wall at dusk' };
+describe('NSFW permissive defaults (AGENTS.md #6): UI seeds visible defaults, backend no longer supplements omitted fields', () => {
+  it('audits explicitly set permissive values but does not mutate the payload', () => {
+    const payload: Record<string, any> = {
+      prompt: 'a red fox sitting on a stone wall at dusk',
+      disable_safety_checker: true,
+    };
     const schemaProps = {
       prompt: { type: 'string' },
       disable_safety_checker: { type: 'boolean', default: false },
@@ -56,7 +59,7 @@ describe('NSFW permissive defaults (AGENTS.md #6): declared switches default to 
     expect(applied).toEqual([]);
   });
 
-  it('fills Venice safe_mode=false, moderation=low, and Fal enable_safety_checker=false, safety_tolerance=5 only when declared', () => {
+  it('omitted fields stay omitted - backend no longer supplements', () => {
     const venice: Record<string, any> = { prompt: 'portrait of a red fox' };
     const fal: Record<string, any> = { prompt: 'portrait of a red fox' };
 
@@ -69,25 +72,11 @@ describe('NSFW permissive defaults (AGENTS.md #6): declared switches default to 
       safety_tolerance: { type: 'string', default: '2' },
     });
 
-    expect(venice).toEqual({
-      prompt: 'portrait of a red fox',
-      safe_mode: false,
-      moderation: 'low',
-    });
-    expect(veniceApplied.map((x) => ({ field: x.field, value: x.value, docUrl: x.docUrl }))).toEqual([
-      { field: 'safe_mode', value: false, docUrl: 'https://docs.venice.ai/guides/media/image-generation' },
-      { field: 'moderation', value: 'low', docUrl: 'https://docs.venice.ai/guides/media/image-generation' },
-    ]);
+    expect(venice).toEqual({ prompt: 'portrait of a red fox' });
+    expect(veniceApplied).toEqual([]);
 
-    expect(fal).toEqual({
-      prompt: 'portrait of a red fox',
-      enable_safety_checker: false,
-      safety_tolerance: '5',
-    });
-    expect(falApplied.map((x) => ({ field: x.field, value: x.value, docUrl: x.docUrl }))).toEqual([
-      { field: 'enable_safety_checker', value: false, docUrl: 'https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/flux-lora' },
-      { field: 'safety_tolerance', value: '5', docUrl: 'https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/flux-2-flex' },
-    ]);
+    expect(fal).toEqual({ prompt: 'portrait of a red fox' });
+    expect(falApplied).toEqual([]);
   });
 
   it('does not fabricate safety fields that are not in the live schema or are unverified', () => {

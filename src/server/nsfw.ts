@@ -26,10 +26,10 @@ export interface AppliedNsfwDefault {
 }
 
 /**
- * For any official NSFW/safety field declared in the live schema (`schemaProps`),
- * if the request payload does not already have an explicit value from the user,
- * fill the verified permissive default and return the audit record (with `docUrl`)
- * so `mapping` can publicly disclose the default policy and official source.
+ * Audit only: the backend never adds a safety field the user did not send (AGENTS.md #5).
+ * Permissive defaults are seeded in the visible UI (SchemaChoiceControls / Civitai control), where the user can
+ * switch them to true / false / 不发送; the wire carries exactly what the saved parameters contain.
+ * Returns the declared safety fields the request carries at their permissive value; the payload is not modified.
  */
 export function applyNsfwDefaultsToPayload(
   payload: Record<string, any>,
@@ -43,8 +43,7 @@ export function applyNsfwDefaultsToPayload(
   const declaredDefaults = extractDeclaredNsfwDefaults(schemaProps);
 
   for (const [field, permissiveValue] of Object.entries(declaredDefaults)) {
-    if (payload[field] === undefined) {
-      payload[field] = permissiveValue;
+    if (payload[field] !== undefined && payload[field] === permissiveValue) {
       const policy = findNsfwPolicy(field)!;
       applied.push({
         field,

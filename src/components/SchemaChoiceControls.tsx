@@ -2,7 +2,7 @@ import { UrlText } from './UrlText';
 import React from 'react';
 import { CANVAS_TO_SCHEMA_ALIASES } from '../utils/schemaSendHint';
 import { formatSchemaFieldLabel } from '../utils/nodeUiLabels';
-import { applyNsfwDefaultsToCustomParameters, findNsfwPolicy, type NsfwFieldPolicy } from '../utils/nsfw';
+import { applyNsfwDefaultsToCustomParameters, findNsfwPolicy, readNsfwOmitted, writeNsfwOmitted, type NsfwFieldPolicy } from '../utils/nsfw';
 
 /**
  * Generic node controls for official-Schema fields that no canvas widget maps to
@@ -203,18 +203,17 @@ function NsfwChoiceFieldRow({
   canvasLoras?: Array<{ name?: string; strength?: number }> | null;
   writeField: (key: string, next: unknown, cleared: boolean) => void;
 }) {
-  const [cleared, setCleared] = React.useState(false);
+  const explicitlyOmitted = readNsfwOmitted(body);
   const rawCurrent = body?.[f.key];
   const current = rawCurrent !== undefined
     ? rawCurrent
-    : (f.nsfwPolicy && !cleared ? f.nsfwPolicy.permissiveValue : undefined);
+    : (f.nsfwPolicy && !explicitlyOmitted.has(f.key) ? f.nsfwPolicy.permissiveValue : undefined);
   const isObj = current && typeof current === 'object' && !Array.isArray(current);
   const mode = current === undefined ? '' : isObj ? '__custom__' : String(current);
   const unfilledLabel = schemaFieldBadge(undefined, f.numberSpec?.default ?? f.defaultValue, f.nsfwPolicy).text;
   const fieldMeta = formatSchemaFieldLabel(f.key);
   const updateVal = (next: unknown) => {
     const nextCleared = next === undefined;
-    setCleared(nextCleared);
     writeField(f.key, next, nextCleared);
   };
   return (
@@ -324,23 +323,25 @@ export function SchemaChoiceControls({
   const loraDescriptions = schemaLoraDescriptions(inputSchema, openapi);
   const declaredKeys = Object.keys(inputSchema?.properties || {});
   const nsfwKeySig = fields.filter((f) => f.isNsfw).map((f) => f.key).sort().join(',');
-  const clearedKeys: Record<string, boolean> = {};
 
   if (!fields.length && !loraDescriptions.length) return null;
   const body = parse(value);
+
   const writeField = (key: string, next: unknown, isCleared = false) => {
     const b = parse(value);
     if (!b) return;
-    if (isCleared) {
-      clearedKeys[key] = true;
-    } else {
-      delete clearedKeys[key];
-    }
+    const omitted = readNsfwOmitted(b);
+    if (isCleared) omitted.add(key);
+    else omitted.delete(key);
+    writeNsfwOmitted(b, omitted);
+
+    // Seed other unset NSFW fields that aren't explicitly omitted
     for (const f of fields) {
-      if (f.isNsfw && f.nsfwPolicy && b[f.key] === undefined && !clearedKeys[f.key] && f.key !== key) {
+      if (f.isNsfw && f.nsfwPolicy && b[f.key] === undefined && !omitted.has(f.key) && f.key !== key) {
         b[f.key] = f.nsfwPolicy.permissiveValue;
       }
     }
+
     if (next === undefined) {
       delete b[key];
     } else {

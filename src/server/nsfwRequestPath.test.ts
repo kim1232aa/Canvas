@@ -68,6 +68,25 @@ describe('/api/fal/generate safety fields', () => {
     expect(captured.safety_tolerance).toBe('2');
   });
 
+  it('keeps the UI omission marker (_canvas.nsfwOmitted) off the upstream body; omitted field stays absent, explicit values verbatim', async () => {
+    const custom = {
+      random_toggle: true,
+      enable_safety_checker: false,
+      _canvas: { scope: { provider: 'fal', model: 'fal-ai/flux-2-flex' }, schemaProperties: ['enable_safety_checker', 'safety_tolerance'], nsfwOmitted: ['safety_tolerance'] },
+    };
+    const { captured } = await fn(
+      { prompt: 'a red fox on a stone wall at dusk' },
+      { body: { custom_parameters: custom } },
+      async () => new Response('{}'),
+      applyCustomParameters,
+    );
+    expect(JSON.stringify(captured)).not.toMatch(/nsfwOmitted|_canvas/);
+    expect(captured).not.toHaveProperty('safety_tolerance');
+    expect(captured.enable_safety_checker).toBe(false);
+    expect(captured.random_toggle).toBe(true);
+    expect(captured.prompt).toBe('a red fox on a stone wall at dusk');
+  });
+
   it('still omits them when the live schema declares them and the user did not', async () => {
     const { captured } = await fn(
       { prompt: 'a red fox on a stone wall at dusk' },

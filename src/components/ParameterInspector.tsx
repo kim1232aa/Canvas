@@ -41,6 +41,7 @@ import { parseExplicitLoraStrength } from '../utils/loraStrength';
 import { fieldOptions, getFieldSpec, resolveSchemaModelId, type FieldKey, type Provider as SchemaProvider } from '../schemas/providerSchema';
 import { middleEllipsis } from '../utils/middleEllipsis';
 import { randomSeedFor, seedRangeAdvisory } from '../utils/seedRange';
+import { readNsfwOmitted, writeNsfwOmitted } from '../utils/nsfw';
 
 export function CivitaiAllowMatureControl({
   customParameters,
@@ -49,27 +50,59 @@ export function CivitaiAllowMatureControl({
   customParameters?: string;
   onChangeCustom: (v: string) => void;
 }) {
-  const [cleared, setCleared] = React.useState(false);
-  const seededRef = React.useRef(false);
+  const initializedRef = React.useRef(false);
 
   let customObj: Record<string, any> = {};
-  try { customObj = JSON.parse(customParameters || '{}'); } catch {}
+  let parseError: string | undefined;
+  try {
+    const parsed = JSON.parse(customParameters || '{}');
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      customObj = parsed;
+    } else {
+      parseError = 'JSON 必须是对象';
+    }
+  } catch (err) {
+    parseError = err instanceof Error ? err.message : String(err);
+  }
+
+  const withMature = (next: boolean | undefined) => {
+    const out: Record<string, any> = { ...customObj };
+    const omitted = readNsfwOmitted(out);
+    if (next === undefined) {
+      delete out.allowMatureContent;
+      omitted.add('allowMatureContent');
+    } else {
+      out.allowMatureContent = next;
+      omitted.delete('allowMatureContent');
+    }
+    writeNsfwOmitted(out, omitted);
+    return JSON.stringify(out, null, 2);
+  };
+
   const rawUnset = customObj.allowMatureContent === undefined;
-  const isUnset = rawUnset && cleared;
+  const explicitlyOmitted = readNsfwOmitted(customObj).has('allowMatureContent');
+  const isUnset = rawUnset && explicitlyOmitted;
   const currentVal = isUnset ? undefined : (rawUnset ? true : Boolean(customObj.allowMatureContent));
   const badge = isUnset
     ? '未填写，不发送（Schema 未声明默认）'
     : `会发送 ${String(currentVal)}`;
 
   React.useEffect(() => {
-    if (rawUnset && !seededRef.current) {
-      seededRef.current = true;
-      onChangeCustom(JSON.stringify({ ...customObj, allowMatureContent: true }, null, 2));
-    }
-  }, [rawUnset]);
+    // Visible default initialization runs once per mount and only for a never-initialized, parseable value.
+    // An explicit choice (true/false) or a recorded 不发送 (_canvas.nsfwOmitted) is never overwritten.
+    if (parseError || initializedRef.current) return;
+    initializedRef.current = true;
+    if (rawUnset && !explicitlyOmitted) onChangeCustom(withMature(true));
+  }, [rawUnset, parseError]);
 
   return (
     <div className="space-y-1 pt-1" data-testid="civitai-allow-mature-control">
+      {parseError && (
+        <div className="mb-2 rounded border border-red-500/50 bg-red-950/20 px-2 py-1.5 text-xs text-red-300">
+          <div className="font-semibold">custom_parameters JSON 解析失败</div>
+          <div className="font-mono text-[10px] mt-0.5">{parseError}</div>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <label className="text-sm text-slate-300">Civitai allowMatureContent</label>
         <span className={`text-[10px] px-1.5 py-0.5 rounded border ${isUnset ? 'border-slate-600 text-slate-400' : 'border-emerald-500/50 text-emerald-300'}`}>
@@ -78,33 +111,20 @@ export function CivitaiAllowMatureControl({
       </div>
       <select
         aria-label="Civitai allowMatureContent"
+        disabled={Boolean(parseError)}
         value={isUnset ? '' : String(currentVal)}
-        onChange={(e) => {
-          const nextCustom = { ...customObj };
-          if (e.target.value === '') {
-            setCleared(true);
-            delete nextCustom.allowMatureContent;
-          } else {
-            setCleared(false);
-            nextCustom.allowMatureContent = e.target.value === 'true';
-          }
-          onChangeCustom(JSON.stringify(nextCustom, null, 2));
-        }}
+        onChange={(e) => onChangeCustom(withMature(e.target.value === '' ? undefined : e.target.value === 'true'))}
         className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 text-slate-200 text-xs font-mono"
       >
         <option value="">（不发送）</option>
         <option value="true">true</option>
         <option value="false">false</option>
       </select>
-      {currentVal !== true && (
+      {currentVal !== true && !parseError && (
         <div className="flex items-center justify-end text-[11px] px-2 py-1">
           <button
             type="button"
-            onClick={() => {
-              setCleared(false);
-              const nextCustom = { ...customObj, allowMatureContent: true };
-              onChangeCustom(JSON.stringify(nextCustom, null, 2));
-            }}
+            onClick={() => onChangeCustom(withMature(true))}
             className="text-[10px] text-cyan-300 hover:text-cyan-200 underline font-semibold cursor-pointer shrink-0"
           >
             填入 true
@@ -1060,7 +1080,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                   key={ar.label}
                   disabled={greyWidthHeight}
                   onClick={() => handleAspectRatioPreset(ar.w, ar.h)}
-                  
+
                   className={`py-1.5 rounded-lg text-center transition-all disabled:opacity-40 disabled:cursor-not-allowed ${omitWidthHeight ? 'opacity-40 ' : ''}${
                     isActive
                       ? 'bg-cyan-500/20 border border-cyan-500/50 text-cyan-300 font-bold'
