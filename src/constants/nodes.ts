@@ -149,7 +149,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         label: '底模',
         type: 'select',
         default: '',
-        options: BASE_MODELS,
+        options: BASE_MODELS.filter(m => m.category !== 'video'),
         placeholder: '输入模型 ID/路径，或点击右上角「模型中心」实时拉取选用',
       },
       // grok_compat: options filled from providerSchema at render time (NodeItem)
@@ -978,6 +978,9 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
           { label: 'Venice', value: 'venice' },
           { label: 'Krea', value: 'krea' },
           { label: 'Sogni', value: 'sogni' },
+          { label: '⚡ NanoGPT (模型中心选择)', value: 'nanogpt' },
+          { label: 'Novita AI (模型中心选择)', value: 'novita' },
+          { label: '🎨 Tensor.Art / OpenWorks (模型中心选择)', value: 'tensorart' },
         ],
       },
       {

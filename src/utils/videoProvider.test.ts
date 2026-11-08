@@ -109,7 +109,11 @@ describe('F4 / soft-visual-4 videoProvider — model select syncs provider; empt
     const providers = def.widgets.find((w) => w.name === 'targetProvider')!.options!.map((o) => String(o.value)).filter(Boolean);
     const models = def.widgets.find((w) => w.name === 'model')!.options!;
     const aspects = def.widgets.find((w) => w.name === 'aspect_ratio')!.options!;
+    // M82: nanogpt/novita/tensorart are open-catalog providers — users select models from the model center
+    // rather than a pre-populated dropdown. They appear in targetProvider but have no preset model entries.
+    const openCatalogProviders = new Set(['nanogpt', 'novita', 'tensorart']);
     for (const provider of providers) {
+      if (openCatalogProviders.has(provider)) continue;
       expect(models.some((o) => o.provider === provider && String(o.value).trim()), provider).toBe(true);
     }
     expect(models.filter((o) => String(o.value).trim()).every((o) => providers.includes(String(o.provider)))).toBe(true);
@@ -127,5 +131,32 @@ describe('F4 / soft-visual-4 videoProvider — model select syncs provider; empt
     expect(aspectRatioForVideoRequest('agnes-video-2.5', '16:9', { loaded: true, declaresAspectRatio: false })).toBeUndefined();
     expect(aspectRatioForVideoRequest('my-custom-endpoint', '21:9')).toBe('21:9');
     expect(aspectRatioForVideoRequest('agnes-video-2.5', '  ')).toBeUndefined();
+  });
+});
+describe('M82: nanogpt/novita/tensorart appear in AIVideoNode provider list', () => {
+  it('AIVideoNode.targetProvider includes nanogpt, novita, tensorart', () => {
+    const def = NODE_DEFINITIONS.AIVideoNode;
+    const providerValues = def.widgets.find((w) => w.name === 'targetProvider')!.options!.map((o) => String(o.value));
+    expect(providerValues).toContain('nanogpt');
+    expect(providerValues).toContain('novita');
+    expect(providerValues).toContain('tensorart');
+  });
+
+  it('assertAIVideoProviderReady accepts nanogpt, novita, tensorart with custom model IDs', () => {
+    expect(assertAIVideoProviderReady('wan-video', 'nanogpt')).toBe('nanogpt');
+    expect(assertAIVideoProviderReady('wan-video-22', 'nanogpt')).toBe('nanogpt');
+    expect(assertAIVideoProviderReady('SVD-XT', 'novita')).toBe('novita');
+    expect(assertAIVideoProviderReady('834845675863700019', 'tensorart')).toBe('tensorart');
+  });
+
+  it('CheckpointLoaderSimple ckpt_name options exclude category=video entries', () => {
+    // NODE_DEFINITIONS is already imported at the top of this file
+    const ckptOpts = NODE_DEFINITIONS.CheckpointLoaderSimple.widgets.find((w: any) => w.name === 'ckpt_name')!.options!;
+    // All returned options must not have category=video
+    expect(ckptOpts.every((o: any) => o.category !== 'video')).toBe(true);
+    // Ensure non-video entries still appear (checkpoint models from fal are present)
+    expect(ckptOpts.some((o: any) => o.provider === 'fal' && o.category === 'checkpoint')).toBe(true);
+    // Fal Kling V3 Standard (category=video) must not appear in the checkpoint loader
+    expect(ckptOpts.some((o: any) => String(o.value).includes('kling-video'))).toBe(false);
   });
 });
