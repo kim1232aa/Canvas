@@ -29,11 +29,11 @@
 | 序号 | 服务商 (Provider) | 涉及预设与模型 | 上游真实报错 (Verbatim Response) | 判定标签 | 充值与复测说明 |
 |:---:|---|---|---|:---:|---|
 | 1 | **Fal.ai** | `fal-ai/krea-2/turbo/lora`, `fal-ai/wan/v2.2-a14b/text-to-video/lora` | `HTTP 403: {"detail":"User is locked. Reason: Exhausted balance..."}` | `PASS_BILLING` | 需在 Fal.ai 控制台为绑定 API Key 充值计算额度 |
-| 2 | **Hugging Face** | `renderartist/Technically-Color-Z-Image-Turbo` (via HF Router) | 实测返回 `HTTP 400: {"error":"Model not supported by provider hf-inference"}` 原样透传展示 | `PASS_BILLING` | 上游推理路由明确拒答，无多余内部路由下拉 |
+| 2 | **Hugging Face** | `renderartist/Technically-Color-Z-Image-Turbo` (via HF Router) | `HTTP 402: {"error":"Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get monthly included credits."}` | `PASS_BILLING` | 证据 `final/06-hf-zimage-run.png`；需在 Hugging Face 账号购买预付费计算额度或订阅 PRO |
 | 3 | **WaveSpeed** | `wavespeed-ai/wan-2.2/i2v-480p-lora` 及文生图 | `HTTP 400: {"message":"Insufficient credits"}`；图像因本地 `data/` 无产物，M46 合规降级为 `PASS_BILLING` | `PASS_BILLING` | 需在 WaveSpeed 平台为对应 Token 充值算力点数并生成真产物 |
 | 4 | **Sogni** | `krea-2-turbo` + `krea2-fever-dream-mood`, `animate_photo` | `HTTP 200 (task status): waiting_for_user - insufficient_credit` (`Debit Error: Insufficient funds`) | `PASS_BILLING` | 需在 Sogni 账号充值 Spark/Token 算力 |
 | 5 | **AIMLAPI** | `alibaba/z-image-turbo-lora` | `HTTP 403: {"error":{"message":"Out of funds","code":403}}` | `PASS_BILLING` | 需在 AIMLAPI 平台充值账户余额 |
-| 6 | **DeepInfra** | `black-forest-labs/FLUX-2-klein-9b` | `HTTP 402: {"error":"Payment required"}` | `PASS_BILLING` | 需在 DeepInfra 控制台添加结算方式充值 |
+| 6 | **DeepInfra** | `black-forest-labs/FLUX-2-klein-9b` | `HTTP 402: {"detail":{"error":"You need positive balance to do inference. Please add balance manually or setup top-up"}}` | `PASS_BILLING` | 证据 `docs/evidence/2026-11-08/13-real-run...`（M46 实机运行透传）；需在 DeepInfra 控制台添加结算方式充值 |
 | 7 | **Mage.space** | `mango-v3` | `HTTP 402: {"error":"Payment required"}` | `PASS_BILLING` | 需在 Mage 账户开通 API 点数包 |
 | 8 | **ModelsLab** | `std-modelslab-t2i` + 手填底模 `z-image-turbo` | 上游 `POST https://modelslab.com/api/v6/images/text2img` HTTP 200，业务体 `{"status":"error","message":"You need to be subscribed to a plan to continue, buy subscription from https://modelslab.com/pricing"}`；本站 `/api/engine/modelslab/generate` 以 HTTP 502 原样透传 | `PASS_BILLING` | 证据 `final/17-modelslab-loaded.png` / `18-modelslab-run.png`（M31 真实 UI 点击出站）。需在 ModelsLab 开通付费套餐后再跑真出图 |
 | 9 | **Civitai** | Civitai Wan 2.2 工作流 / Krea 2 Turbo | `HTTP 400: {"code":"insufficientBuzz","message":"User has insufficient buzz to run workflow."}` | `PASS_BILLING` | 需为 Civitai 账号充值 Buzz 积分以执行云端工作流 |

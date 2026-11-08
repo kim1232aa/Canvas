@@ -79,20 +79,20 @@
 
 ## 三、产物清单与截图证据 (Visible UI Artifacts & Checksums)
 
-所有 14 张高保真截图均保存在 `docs/evidence/2026-11-08/` 目录下，经实机渲染并经检验，哈希互不重复。
+所有 14 张高保真截图保存在 `docs/evidence/2026-11-08/` 目录下，经实机重新定位核取并经检验，每张截图的实际像素内容与下表描述 100% 对应：
 
-| 序号 | 截图文件名 | 磁盘物理路径 | 文件大小 | SHA256 哈希 | 核心功能与验收验证要点 |
+| 序号 | 截图文件名 | 磁盘物理路径 | 文件大小 | SHA256 哈希 | 核心功能与验收验证要点（已落实 R1 审核修复） |
 | :---: | :--- | :--- | :---: | :--- | :--- |
-| **01** | `01-civitai-import-runware-air.png` | `docs/evidence/2026-11-08/01-civitai-import-runware-air.png` | 276,115 B | `95099da1d25441f98f4d41ab5ebb626c5d6cc84beb38bcec79712192c19f4ffd` | **M77 验证**：Civitai 导入弹窗切换到 Runware，明确显示目标平台需要从目录选择真实模型，保留来源架构，LoRA 按 Civitai AIR 规范映射解析。 |
+| **01** | `01-civitai-import-runware-air.png` | `docs/evidence/2026-11-08/01-civitai-import-runware-air.png` | 277,183 B | `db362f748324f9aa80490b036ce3c41538dfdc30632fb612b78885125d53ab1d` | **M77 验证 (R1 修复)**：Civitai 导入弹窗切换到 Runware，未选定具体目标模型时实事求是呈现「未选择目标模型；请在上方选用目标模型以加载其实时 Schema 规范」，LoRA 状态诚实标为「未核实」，保留来源架构 Krea 2 Turbo，必须从 Runware 目录选择真实模型后再由其实时 Schema 驱动 AIR 映射；绝不静默假装成功。 |
 | **02** | `02-civitai-import-sogni-source-vs-id.png` | `docs/evidence/2026-11-08/02-civitai-import-sogni-source-vs-id.png` | 310,871 B | `11cc85abfad90568f408bab057bf6353c82f923eb0b1ce7d26586a54bab40eae` | **M77 验证**：Civitai 导入弹窗切换到 Sogni，明确区分 Civitai/HF 下载 URL 是 personal-LoRA 导入来源，生成时必须使用 ready personal ID 或目录 ID。 |
-| **03** | `03-canvas-add-node-menu-aivideonode.png` | `docs/evidence/2026-11-08/03-canvas-add-node-menu-aivideonode.png` | 304,842 B | `e26befe393cd7298d55bad71421d9465f2c12c885b35b02f3506c0525544d247` | 画布右键菜单完整包含 `AI 视频（显式 Provider/Model）` (`AIVideoNode`)。 |
+| **03** | `03-canvas-add-node-menu-aivideonode.png` | `docs/evidence/2026-11-08/03-canvas-add-node-menu-aivideonode.png` | 311,437 B | `6674eed38fc1596f839f615685eb8e001852993b75d40f0be9aa41e08e1f3bda` | **R1 修复**：画布右键添加节点菜单已向下滚动，中央清晰完整呈现 `AI 视频（显式 Provider/Model）` (`AIVideoNode`)。 |
 | **04** | `04-aivideonode-targetprovider-dropdown.png` | `docs/evidence/2026-11-08/04-aivideonode-targetprovider-dropdown.png` | 348,929 B | `63e6779860117eef4ffe09f14a4090d0a3d15d99708451c4131ed1257843a593` | **M81 & M82 验证**：画布 `AIVideoNode` 节点展开 `targetProvider` 下拉，完整包含 `nanogpt`、`novita`、`tensorart` 选项。 |
 | **05** | `05-aivideonode-lorahub-mount-allproviders.png` | `docs/evidence/2026-11-08/05-aivideonode-lorahub-mount-allproviders.png` | 179,487 B | `3bad059b101f3a2d9a87e103c3ec427638be278dfa5a79025c5501a30ca36ca4` | 模型中心打开 LoRA 库挂载至 `AIVideoNode`，验证 `'全部服务商'` 页签处于激活可点击状态。 |
 | **06** | `06-providermatrix-gemini-native.png` | `docs/evidence/2026-11-08/06-providermatrix-gemini-native.png` | 337,773 B | `79a0cc2a71c8345d680831e92ef840dc982bf9c18acd48fac21c46bdf29addd2` | **M83 验证**：供应商全景矩阵第 1 标签页，完整呈现 `Google Gemini 原生图像`、`gemini-3.1-flash-image`、Imagen 已下线说明与提示词原样透传规范。 |
-| **07** | `07-civitai-lora-preset-loraloader.png` | `docs/evidence/2026-11-08/07-civitai-lora-preset-loraloader.png` | 294,261 B | `b50e8ccaf1345d66d82271f546f0a899a372c00e620a27982d81f86402a96d73` | Civitai LoRA 预设载入画布，呈现完好连线的 LoRALoader 节点与拓扑结构。 |
+| **07** | `07-civitai-lora-preset-loraloader.png` | `docs/evidence/2026-11-08/07-civitai-lora-preset-loraloader.png` | 312,651 B | `eb4d7191b180cee970a6b6f48ad1bf464a71d579ca1a8b89c27ac536ddf1e45a` | **R1 修复**：真正载入 Civitai LoRA 预设（`Civitai · 花饰人像`），画布项目名为 `Civitai · 花饰人像`，呈现完好连线的 Civitai 底模节点（`urn:air:krea2:diffusionmodel:civitai:2732656@3072332`）与 Civitai LoRALoader 节点（`urn:air:krea2:lora:civitai:929497@3077110`，权重 0.85），与 08 号 HF 图彻底独立。 |
 | **08** | `08-huggingface-node-no-routing-dropdown.png` | `docs/evidence/2026-11-08/08-huggingface-node-no-routing-dropdown.png` | 294,264 B | `2b5ec8acbabd104987f6bcc52e3782826be0c996c77468225420d4aee03d16ba` | Hugging Face CheckpointLoaderSimple 节点清晰可见，已彻底剥离内部 `hf_provider` 路由下拉框。 |
-| **09** | `09-lorahub-autopair-tensorart-crossbar.png` | `docs/evidence/2026-11-08/09-lorahub-autopair-tensorart-crossbar.png` | 283,025 B | `ce286836acd5bf136b24e52e3682ea8c27598a80d93730fb907a87849c58aa56` | 模型中心 LoRA 分类下，顶部常驻跨供应商横栏（含 `Tensor.Art (TAMS)` 与 `Tensor.Art OpenWorks`），各 LoRA 卡片呈现 `🎯 选用 LoRA 并自动配对底模` 按钮。 |
-| **10** | `10-executionlog-drawer-open.png` | `docs/evidence/2026-11-08/10-executionlog-drawer-open.png` | 305,116 B | `fab48a668293699dbf0bf6d8605ad2468b6f0c203b0a222873fc90af7133d2c4` | 底部 `ExecutionLog` 抽屉展开，实时展示各次真实网络出站记录。 |
+| **09** | `09-lorahub-autopair-tensorart-crossbar.png` | `docs/evidence/2026-11-08/09-lorahub-autopair-tensorart-crossbar.png` | 280,719 B | `c24b05b873722b3d24552bb53a21986a707174aa9eb4bf5ef36f6a3040eac98e` | **R1 修复**：模型与 LoRA 目录常驻跨服务商横栏滚动到位，同时完整呈现 `Tensor.Art (TAMS)` 与 `Tensor.Art OpenWorks`；各卡片呈现 `选用 LoRA 并自动配对底模` 按钮，由于上游目录未提供明确架构元数据，实事求是标注 `架构未知，无法判断兼容`，不虚报兼容。 |
+| **10** | `10-executionlog-drawer-open.png` | `docs/evidence/2026-11-08/10-executionlog-drawer-open.png` | 358,220 B | `7ea7021aaa898e1856d746ae136384785f515c8a95c8ae28c60bef36431b21a6` | **R1 修复**：在真实运行出站后展开底部 `ExecutionLog` 抽屉，展示真实出站生成记录行（`POST /api/schema-provider/deepinfra/submit · HTTP 402 · 失败` 及 `actualRequest`），绝非空记录状态。 |
 | **11** | `11-api-parameter-editor-json.png` | `docs/evidence/2026-11-08/11-api-parameter-editor-json.png` | 352,303 B | `759ccf9f095070e57e73017d66895ec75d7f789d3571207ba43d71110ad1ed9b` | 参数总控台内的 `ApiParameterEditor` 自由 JSON 文本编辑框，支持自定义键值覆盖与官方 Schema 一键读取。 |
 | **12** | `12-lora-autopair-checkpoint-button.png` | `docs/evidence/2026-11-08/12-lora-autopair-checkpoint-button.png` | 274,130 B | `a649db2e1c9c40ac82a12fbee3a9e13d89e54abd37071c243064b08ae2a37f0d` | LoRALoader 节点上明确呈现已验证底模配对按钮（`应用已验证底模 black-forest-labs/FLUX.1-dev`）。 |
 | **13** | `13-real-run-actualrequest-upstream-response.png` | `docs/evidence/2026-11-08/13-real-run-actualrequest-upstream-response.png` | 343,453 B | `9b0da7b91bb37df51213993c719cc5fa9b7537917aa8df6fdf0f2f20f92ebab1` | **核心运行验收**：真实点击运行按钮，带满正向提示词、模型与参数，点击运行后真实出站抵达 DeepInfra，界面原样无损展示 HTTP 402 及 `{"detail":{"error":"You need positive balance to do inference. Please add balance manually or setup top-up"}}` (`PASS_BILLING`)。 |
@@ -115,5 +115,7 @@
 - **WaveSpeed 图像声明降级**: `README.md` 原声称 WaveSpeed 图像 `PASS_GENERATION` 并引用 `hist_1792224305224_meynb`。经 `ls data/` 实测只有 `.gitkeep`，`grep -rn "hist_1792224305224_meynb" data/` 结果为 0。已严格按产物诚实原则降级为 `PASS_BILLING`。
 - **Tensor.Art (OpenWorks) 图像声明降级**: 原引用 `hist_1793693239642_fo6ux` 同样无磁盘产物，已同步降级为 `PASS_BILLING`。
 - **Novita AI 视频状态修正**: 原声称 Novita SVD-XT 视频 `PASS_BILLING`，但在代码中 `RETIRED_PATTERNS` 已将 SVD-XT 判为退役，且 `videoGenerateRoute.ts` 的 `VIDEO_PROVIDERS` 不含 novita，该 403 无法从当前 UI 触达。已诚实修正为 `NOT_SENT`。
+- **Hugging Face 文档声明校正 (R1 修复)**: 删除无截图证据的「实测 HTTP 400 Model not supported」声明，恢复经过往实测截图 `final/06-hf-zimage-run.png` 验证的 `402 Purchase pre-paid credits` (`PASS_BILLING`) 声明。
 - **清理伪产物占位图**: `public/seed-ok-preview.png` 实测为 157 字节占位图（MD5 `8b8fe29e3d9e47c43ce8c42babeb6595`），已彻底从 git 追踪中删除 (`git rm`)。
 - **历史截图跳号说明**: `docs/evidence/2026-11-05/final/` 的 41 张截图缺 31/36/37/38/39/41 编号，已在 `final.md` 索引开头明确补充跳号原由（历史分组编号而非顺序计数，全量 41 文件均唯一且有效）。
+- **目录重复去重**: `docs/evidence/2026-11-07/` 仅保留指针说明文件 `acceptance.md` 指向 `docs/evidence/2026-11-08/`，彻底删除 14 张重复的 PNG 文件，避免仓库体积膨胀。
