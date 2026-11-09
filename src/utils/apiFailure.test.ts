@@ -154,6 +154,14 @@ it('httpErrorFromResponse: non-JSON body kept verbatim with real status',async()
   expect((err as any).status).toBe(502);
   expect((err as any).responseBody).toBe(html);
 });
+it('httpErrorFromResponse: JSON body with object error preserves status, verbatim responseBody, and parsed data without [object Object]',async()=>{
+  const raw=JSON.stringify({error:{code:'payment_required',message:'x'}});
+  const err=await httpErrorFromResponse(new Response(raw,{status:402}));
+  expect(err.message).toBe('HTTP 402: {"code":"payment_required","message":"x"}');
+  expect((err as any).status).toBe(402);
+  expect((err as any).responseBody).toBe(raw);
+  expect((err as any).data).toEqual({error:{code:'payment_required',message:'x'}});
+});
 it('httpErrorMessageFromBody: JSON picks details, then error, else raw text',async()=>{
   const mk=(o:unknown)=>readResponseBody(new Response(JSON.stringify(o),{status:400}));
   expect(httpErrorMessageFromBody(await mk({error:'e',details:'d'}))).toBe('HTTP 400: d');

@@ -1,4 +1,5 @@
 import { tracedFetch as fetch } from '../../services/executionTrace';
+import { httpErrorFromResponse } from '../../utils/apiFailure';
 import { BaseEngineDriver } from '../BaseEngineDriver';
 import { NormalizedGenerateParams, NormalizedGenerateResult, ModelSpec } from '../types';
 
@@ -71,17 +72,14 @@ export class TensorArtDriver extends BaseEngineDriver {
     });
 
     if (!resp.ok) {
-      const rawBody = await resp.text().catch(() => '');
       if (params.isVideo) {
-        try {
-          const err = JSON.parse(rawBody);
-          throw new Error(err.details || err.error || rawBody);
-        } catch (e: any) {
-          if (e instanceof SyntaxError) throw new Error(rawBody || `HTTP ${resp.status}`);
-          throw e;
-        }
+        throw await httpErrorFromResponse(resp);
       }
-      throw new Error(`Tensor.Art 路由 ${endpoint} 返回 HTTP ${resp.status}: ${rawBody}`);
+      const rawBody = await resp.text().catch(() => '');
+      throw Object.assign(new Error(`Tensor.Art 路由 ${endpoint} 返回 HTTP ${resp.status}: ${rawBody}`), {
+        status: resp.status,
+        responseBody: rawBody,
+      });
     }
 
     const data = await resp.json();

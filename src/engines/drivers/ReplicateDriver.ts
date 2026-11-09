@@ -1,4 +1,5 @@
 import { tracedFetch as fetch } from '../../services/executionTrace';
+import { httpErrorFromResponse } from '../../utils/apiFailure';
 import { BaseEngineDriver, withFilledCanvasParams } from '../BaseEngineDriver';
 import {
   NormalizedGenerateParams,
@@ -138,15 +139,7 @@ export class ReplicateDriver extends BaseEngineDriver {
     });
 
     if (!resp.ok) {
-      const raw = await resp.text();
-      let msg = `Replicate 路由 HTTP ${resp.status}`;
-      try {
-        const errJson = JSON.parse(raw);
-        msg = errJson.details || errJson.error || msg;
-      } catch {
-        msg = `${msg}: ${raw}`;
-      }
-      throw new Error(msg);
+      throw await httpErrorFromResponse(resp);
     }
 
     const data = await resp.json();
