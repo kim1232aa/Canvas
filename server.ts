@@ -3486,6 +3486,8 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
         let videoSchemaSelected: string[] | undefined;
         let videoSchemaFetch: { endpoint: string; status: number | null; body?: string; error?: string } | undefined;
         let videoOverrides: unknown[] = [];
+        let videoOmitted: any[] = [];
+        let videoFieldStatus: Record<string, string> = {};
         let openApi: unknown;
         try {
           const schemaResp = await upstreamFetch(
@@ -3533,6 +3535,8 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
           videoSchemaFields = built.schemaFields;
           videoSchemaSelected = built.schemaSelected;
           videoOverrides = built.overrides;
+          videoOmitted = built.omitted || [];
+          videoFieldStatus = built.fieldStatus || {};
         } catch (schemaOrMappingError: any) {
           return res.status(400).json({
             error: String(schemaOrMappingError?.message || schemaOrMappingError),
@@ -3563,12 +3567,26 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
           ...(videoSchemaFields ? { schemaFields: videoSchemaFields } : {}),
           ...(videoSchemaSelected ? { schemaSelected: videoSchemaSelected } : {}),
           ...(videoOverrides.length ? { overrides: videoOverrides } : {}),
+          ...(videoOmitted.length ? { omitted: videoOmitted, parameterOmissions: videoOmitted } : {}),
+          ...(Object.keys(videoFieldStatus).length ? { fieldStatus: videoFieldStatus } : {}),
           actualRequest: {
             ...(videoAllowMature !== undefined ? { allowMatureContent: videoAllowMature } : {}),
             steps: [{ $type: 'videoGen', input: videoInput }],
           },
           endpoint: workflowEndpoint,
         };
+        if (videoOmitted.length) {
+          generationContext.getStore()?.traces.push(
+            sanitizeGenerationMetadata({
+              stage: 'parameter-omissions',
+              provider: 'civitai',
+              endpoint: workflowEndpoint,
+              omitted: videoOmitted,
+              parameterOmissions: videoOmitted,
+              schemaFields: videoSchemaFields,
+            })
+          );
+        }
         generationContext.getStore()?.traces.push({ stage: 'civitai-video-schema-mapping', provider: 'civitai', ...sanitizeGenerationMetadata(videoRequestMetadata) });
 
         let orchResp: Response;

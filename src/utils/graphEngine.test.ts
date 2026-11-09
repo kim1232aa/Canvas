@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { isCanvasFieldUnsupported } from './resolveCheckpoint';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { extractWorkflowParameters, executeWorkflow, resolveTargetNode, sanitizeExecutionSnapshotNodes, shouldClearExecutionOutput, clearNodeExecutionErrors } from './graphEngine';
@@ -5,6 +7,8 @@ import { Connection, NodeInstance } from '../types/graph';
 import { EngineRegistry } from '../engines/EngineRegistry';
 import { NormalizedGenerateResult } from '../engines/types';
 import * as api from '../services/api';
+import { CivitaiDriver } from '../engines/drivers/CivitaiDriver';
+import { buildCivitaiVideoInput } from '../schemas/civitaiVideo';
 
 describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离测试', () => {
   beforeEach(() => {
@@ -1059,6 +1063,187 @@ describe('graphEngine - F4 AIVideoNode provider sync / reject empty & mismatch',
     ];
     const params = extractWorkflowParameters(nodes, [], 'video-node');
     expect(params.videoProvider).toBe('agnes');
+  });
+
+  it('AIVideoNode extraction carries the selected sampler and scheduler', () => {
+    const nodes: NodeInstance[] = [
+      createNode('video-node', 'AIVideoNode', {
+        model: 'custom-civitai-wan-v22-comfy',
+        targetProvider: 'civitai',
+        prompt: 'a cinematic orbit around a lighthouse at sunset',
+        sampler_name: 'euler',
+        scheduler: 'simple',
+      }),
+    ];
+
+    const extracted = extractWorkflowParameters(nodes, [], 'video-node');
+
+    expect(extracted.sampler).toBe('euler');
+    expect(extracted.scheduler).toBe('simple');
+  });
+
+  it('End-to-end chain: AIVideoNode -> graphEngine extraction -> CivitaiDriver -> buildCivitaiVideoInput -> outgoing payload', async () => {
+    const fixturePath = resolve(__dirname, '../server/__fixtures__/video-preset-dryrun-2026-11-04/civitai-videogen-schemas.json');
+    const officialSchemas = JSON.parse(readFileSync(fixturePath, 'utf8'));
+
+    // 1. Positive case: Wan 2.2 Comfy schema declares sampler & scheduler
+    const nodesFilled: NodeInstance[] = [
+      createNode('video-node', 'AIVideoNode', {
+        model: 'urn:air:wanvideo-22-t2v-a14b:checkpoint:civitai:1817671@2114154',
+        targetProvider: 'civitai',
+        prompt: 'a cinematic orbit around a lighthouse at sunset',
+        sampler_name: 'euler',
+        scheduler: 'simple',
+        fps: 24,
+        steps: 20,
+        cfg: 3,
+        video_selectors: { engine: 'wan', version: 'v2.2', provider: 'comfy' },
+      }),
+    ];
+
+    const extractedFilled = extractWorkflowParameters(nodesFilled, [], 'video-node');
+    expect(extractedFilled.sampler).toBe('euler');
+    expect(extractedFilled.scheduler).toBe('simple');
+
+    // Simulate driver request payload from extracted workflow parameters
+    let capturedBody: any;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (_url: any, init?: any) => {
+      capturedBody = JSON.parse(String(init?.body));
+      return new Response(JSON.stringify({ id: 'mock-workflow-id', videoUrl: 'https://example.test/out.mp4' }), { status: 200 });
+    }) as any;
+
+    try {
+      const driver = new CivitaiDriver();
+      await driver.generate({
+        prompt: extractedFilled.positivePrompt,
+        model: extractedFilled.checkpointModel,
+        isVideo: extractedFilled.isVideo,
+        sampler_name: extractedFilled.sampler,
+        scheduler: extractedFilled.scheduler,
+        steps: extractedFilled.steps,
+        cfg: extractedFilled.cfg,
+        videoFps: extractedFilled.videoFps,
+        extraParams: {
+          ...extractedFilled.videoSelectors,
+          sampler_name: extractedFilled.sampler,
+          scheduler: extractedFilled.scheduler,
+        },
+      }, { civitai: 'test-token' });
+
+      expect(capturedBody).toBeDefined();
+      expect(capturedBody.sampler_name).toBe('euler');
+      expect(capturedBody.scheduler).toBe('simple');
+
+      // Server-side building of videoGen input with official schema
+      const built = buildCivitaiVideoInput(capturedBody, officialSchemas);
+      const actualRequest = {
+        steps: [{ $type: 'videoGen', input: built.payload }],
+      };
+
+      // Assert declared fields are mapped to official schema wire names
+      expect(actualRequest.steps[0].input.sampler).toBe('euler');
+      expect(actualRequest.steps[0].input.scheduler).toBe('simple');
+      expect(actualRequest.steps[0].input).not.toHaveProperty('sampler_name');
+      expect(built.omitted).toEqual([]);
+      expect(built.fieldStatus.sampler_name).toBe('supported');
+      expect(built.fieldStatus.scheduler).toBe('supported');
+
+      // 2. Unfilled case: when sampler_name & scheduler are not filled, neither appears in payload
+      const nodesUnfilled: NodeInstance[] = [
+        createNode('video-node-unfilled', 'AIVideoNode', {
+          model: 'urn:air:wanvideo-22-t2v-a14b:checkpoint:civitai:1817671@2114154',
+          targetProvider: 'civitai',
+          prompt: 'a cinematic orbit around a lighthouse at sunset',
+          fps: 24,
+          steps: 20,
+          cfg: 3,
+          video_selectors: { engine: 'wan', version: 'v2.2', provider: 'comfy' },
+        }),
+      ];
+      const extractedUnfilled = extractWorkflowParameters(nodesUnfilled, [], 'video-node-unfilled');
+      expect(extractedUnfilled.sampler).toBeUndefined();
+      expect(extractedUnfilled.scheduler).toBeUndefined();
+
+      capturedBody = undefined;
+      await driver.generate({
+        prompt: extractedUnfilled.positivePrompt,
+        model: extractedUnfilled.checkpointModel,
+        isVideo: extractedUnfilled.isVideo,
+        sampler_name: extractedUnfilled.sampler,
+        scheduler: extractedUnfilled.scheduler,
+        steps: extractedUnfilled.steps,
+        cfg: extractedUnfilled.cfg,
+        videoFps: extractedUnfilled.videoFps,
+        extraParams: { ...extractedUnfilled.videoSelectors },
+      }, { civitai: 'test-token' });
+
+      expect(capturedBody).not.toHaveProperty('sampler_name');
+      expect(capturedBody).not.toHaveProperty('scheduler');
+
+      const builtUnfilled = buildCivitaiVideoInput(capturedBody, officialSchemas);
+      const actualRequestUnfilled = {
+        steps: [{ $type: 'videoGen', input: builtUnfilled.payload }],
+      };
+      expect(actualRequestUnfilled.steps[0].input).not.toHaveProperty('sampler');
+      expect(actualRequestUnfilled.steps[0].input).not.toHaveProperty('sampler_name');
+      expect(actualRequestUnfilled.steps[0].input).not.toHaveProperty('scheduler');
+      expect(builtUnfilled.omitted).toEqual([]);
+
+      // 3. Undeclared schema case: Wan 2.1 Civitai does NOT declare sampler or scheduler
+      const nodesUndeclared: NodeInstance[] = [
+        createNode('video-node-undeclared', 'AIVideoNode', {
+          model: 'urn:air:wan:checkpoint:civitai:1@2',
+          targetProvider: 'civitai',
+          prompt: 'a cinematic orbit around a lighthouse at sunset',
+          sampler_name: 'euler',
+          scheduler: 'simple',
+          video_selectors: { engine: 'wan', version: 'v2.1', provider: 'civitai' },
+        }),
+      ];
+      const extractedUndeclared = extractWorkflowParameters(nodesUndeclared, [], 'video-node-undeclared');
+      capturedBody = undefined;
+      await driver.generate({
+        prompt: extractedUndeclared.positivePrompt,
+        model: extractedUndeclared.checkpointModel,
+        isVideo: extractedUndeclared.isVideo,
+        sampler_name: extractedUndeclared.sampler,
+        scheduler: extractedUndeclared.scheduler,
+        extraParams: {
+          ...extractedUndeclared.videoSelectors,
+          sampler_name: extractedUndeclared.sampler,
+          scheduler: extractedUndeclared.scheduler,
+        },
+      }, { civitai: 'test-token' });
+
+      const builtUndeclared = buildCivitaiVideoInput(capturedBody, officialSchemas);
+      const actualRequestUndeclared = {
+        steps: [{ $type: 'videoGen', input: builtUndeclared.payload }],
+      };
+
+      // Must not be sent in input
+      expect(actualRequestUndeclared.steps[0].input).not.toHaveProperty('sampler');
+      expect(actualRequestUndeclared.steps[0].input).not.toHaveProperty('sampler_name');
+      expect(actualRequestUndeclared.steps[0].input).not.toHaveProperty('scheduler');
+
+      // Must be explicitly recorded in omitted with clear reason
+      expect(builtUndeclared.omitted).toEqual([
+        expect.objectContaining({
+          field: 'sampler_name',
+          value: 'euler',
+          reason: expect.stringContaining('未声明字段未发送'),
+        }),
+        expect.objectContaining({
+          field: 'scheduler',
+          value: 'simple',
+          reason: expect.stringContaining('未声明字段未发送'),
+        }),
+      ]);
+      expect(builtUndeclared.fieldStatus.sampler_name).toBe('omitted');
+      expect(builtUndeclared.fieldStatus.scheduler).toBe('omitted');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 
   it('supports 3-node direct cloud generation (CheckpointLoaderSimple -> CLIPTextEncode -> SaveImage)', () => {

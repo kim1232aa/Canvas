@@ -96,6 +96,12 @@ export interface CivitaiVideoUnmappedField {
   reason: string;
 }
 
+export interface CivitaiVideoOmittedField {
+  field: string;
+  value: unknown;
+  reason: string;
+}
+
 function assignCanvasField(
   input: JsonObject,
   properties: Record<string, any>,
@@ -104,11 +110,24 @@ function assignCanvasField(
   candidates: string[],
   value: unknown,
   unmappedFields: CivitaiVideoUnmappedField[],
+  omitted?: CivitaiVideoOmittedField[],
+  fieldStatus?: Record<string, string>,
+  options?: { omitIfUndeclared?: boolean },
 ): void {
   if (!provided(value)) return;
   const wire = candidates.find((candidate) => Object.hasOwn(properties, candidate));
   if (!wire) {
     if (candidates.some((candidate) => Object.hasOwn(custom, candidate)) || Object.hasOwn(custom, source)) return;
+    if (options?.omitIfUndeclared) {
+      const reason = `未声明字段未发送：当前所选 Civitai 视频 Schema 未声明 ${source}（候选 ${candidates.join('/')}），已省略未发送`;
+      omitted?.push({
+        field: source,
+        value,
+        reason,
+      });
+      if (fieldStatus) fieldStatus[source] = 'omitted';
+      return;
+    }
     input[source] = value;
     unmappedFields.push({
       field: source,
@@ -116,9 +135,11 @@ function assignCanvasField(
       passthroughAs: source,
       reason: `未声明字段已原样透传：当前所选 Civitai 视频 Schema 未声明 ${source}（候选 ${candidates.join('/')}），已按 input.${source} 原样透传`,
     });
+    if (fieldStatus) fieldStatus[source] = 'unmapped-passthrough';
     return;
   }
   input[wire] = value;
+  if (fieldStatus) fieldStatus[source] = 'supported';
 }
 
 function mapModel(
@@ -231,6 +252,8 @@ export interface CivitaiVideoInputResult {
   schemaSelected: string[];
   overrides: unknown[];
   unmappedFields: CivitaiVideoUnmappedField[];
+  omitted: CivitaiVideoOmittedField[];
+  fieldStatus: Record<string, string>;
 }
 
 export function buildCivitaiVideoInput(body: Record<string, any>, officialOpenApi: unknown): CivitaiVideoInputResult {
@@ -240,6 +263,8 @@ export function buildCivitaiVideoInput(body: Record<string, any>, officialOpenAp
   const customFields = parseCustomObject(body.custom_parameters) ?? {};
   const input: JsonObject = {};
   const unmappedFields: CivitaiVideoUnmappedField[] = [];
+  const omitted: CivitaiVideoOmittedField[] = [];
+  const fieldStatus: Record<string, string> = {};
 
   // Preserve the existing Wan v2.1 mapping through declarations in that exact official variant.
   for (const selector of ['engine', 'version', 'provider', 'operation']) {
@@ -247,22 +272,24 @@ export function buildCivitaiVideoInput(body: Record<string, any>, officialOpenAp
   }
   if (provided(body.prompt)) input.prompt = body.prompt;
   mapModel(input, properties, customFields, body, unmappedFields);
-  assignCanvasField(input, properties, customFields, 'cfg', ['cfgScale'], body.cfg, unmappedFields);
-  assignCanvasField(input, properties, customFields, 'steps', ['steps'], body.steps, unmappedFields);
-  assignCanvasField(input, properties, customFields, 'seed', ['seed'], body.seed, unmappedFields);
-  assignCanvasField(input, properties, customFields, 'fps', ['fps'], body.fps, unmappedFields);
-  assignCanvasField(input, properties, customFields, 'width', ['width'], body.width, unmappedFields);
-  assignCanvasField(input, properties, customFields, 'height', ['height'], body.height, unmappedFields);
-  assignCanvasField(input, properties, customFields, 'videoDuration', ['duration'], body.videoDuration, unmappedFields);
-  assignCanvasField(input, properties, customFields, 'aspectRatio', ['aspectRatio'], body.aspectRatio, unmappedFields);
-  assignCanvasField(input, properties, customFields, 'negative_prompt', ['negativePrompt'], body.negative_prompt, unmappedFields);
-  assignCanvasField(input, properties, customFields, 'sampler_name', ['sampler', 'samplerName'], body.sampler_name, unmappedFields);
-  assignCanvasField(input, properties, customFields, 'scheduler', ['scheduler'], body.scheduler, unmappedFields);
-  assignCanvasField(input, properties, customFields, 'denoise', ['denoise', 'strength'], body.denoise, unmappedFields);
+  assignCanvasField(input, properties, customFields, 'cfg', ['cfgScale'], body.cfg, unmappedFields, omitted, fieldStatus);
+  assignCanvasField(input, properties, customFields, 'steps', ['steps'], body.steps, unmappedFields, omitted, fieldStatus);
+  assignCanvasField(input, properties, customFields, 'seed', ['seed'], body.seed, unmappedFields, omitted, fieldStatus);
+  assignCanvasField(input, properties, customFields, 'fps', ['fps'], body.fps, unmappedFields, omitted, fieldStatus);
+  assignCanvasField(input, properties, customFields, 'width', ['width'], body.width, unmappedFields, omitted, fieldStatus);
+  assignCanvasField(input, properties, customFields, 'height', ['height'], body.height, unmappedFields, omitted, fieldStatus);
+  assignCanvasField(input, properties, customFields, 'videoDuration', ['duration'], body.videoDuration, unmappedFields, omitted, fieldStatus);
+  assignCanvasField(input, properties, customFields, 'aspectRatio', ['aspectRatio'], body.aspectRatio, unmappedFields, omitted, fieldStatus);
+  assignCanvasField(input, properties, customFields, 'negative_prompt', ['negativePrompt'], body.negative_prompt, unmappedFields, omitted, fieldStatus);
+  const samplerVal = body.sampler_name ?? body.sampler;
+  const schedulerVal = body.scheduler;
+  assignCanvasField(input, properties, customFields, 'sampler_name', ['sampler', 'samplerName'], samplerVal, unmappedFields, omitted, fieldStatus, { omitIfUndeclared: true });
+  assignCanvasField(input, properties, customFields, 'scheduler', ['scheduler'], schedulerVal, unmappedFields, omitted, fieldStatus, { omitIfUndeclared: true });
+  assignCanvasField(input, properties, customFields, 'denoise', ['denoise', 'strength'], body.denoise, unmappedFields, omitted, fieldStatus);
   if (provided(body.clipSkip)) {
-    assignCanvasField(input, properties, customFields, 'clipSkip', ['clipSkip'], body.clipSkip, unmappedFields);
+    assignCanvasField(input, properties, customFields, 'clipSkip', ['clipSkip'], body.clipSkip, unmappedFields, omitted, fieldStatus);
   } else if (provided(body.clip_skip)) {
-    assignCanvasField(input, properties, customFields, 'clip_skip', ['clipSkip'], body.clip_skip, unmappedFields);
+    assignCanvasField(input, properties, customFields, 'clip_skip', ['clipSkip'], body.clip_skip, unmappedFields, omitted, fieldStatus);
   }
   mapImage(input, properties, customFields, body.image_url, unmappedFields);
   mapLoras(input, properties, customFields, body.loras, document, unmappedFields);
@@ -287,6 +314,8 @@ export function buildCivitaiVideoInput(body: Record<string, any>, officialOpenAp
     schemaSelected: [...new Set(selected.selected)],
     overrides: custom.overrides,
     unmappedFields,
+    omitted,
+    fieldStatus,
   };
 }
 
