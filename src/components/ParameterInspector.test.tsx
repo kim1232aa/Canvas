@@ -654,7 +654,7 @@ describe('ParameterInspector prompt refine controls', () => {
     }));
     await mount();
 
-    expect(Array.from(host.querySelectorAll('select[aria-label="润色服务商"] option')).map((option) => option.value)).toEqual(['']);
+    expect(Array.from(host.querySelectorAll<HTMLOptionElement>('select[aria-label="润色服务商"] option')).map((option) => option.value)).toEqual(['']);
     expect(host.textContent).toContain('没有可用的润色服务商');
   });
 
