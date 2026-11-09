@@ -44,6 +44,17 @@ export const OFFICIAL_NSFW_FIELD_POLICIES: Record<string, NsfwFieldPolicy> = {
     docUrl: 'https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/flux-lora',
     description: 'Fal.ai live schema (flux-lora, flux-2-flex, 2026-11-07): boolean, default true. false disables the checker and requires account authorization; unauthorized requests are always checked.',
   },
+  enable_output_safety_checker: {
+    field: 'enable_output_safety_checker',
+    type: 'boolean',
+    permissiveValue: false,
+    upstreamDefault: false,
+    restrictedValue: true,
+    permissiveLabel: 'false',
+    restrictedLabel: 'true',
+    docUrl: 'https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/wan/v2.2-a14b/image-to-video/lora',
+    description: 'Fal.ai Wan 2.2 video live schema (fal-ai/wan/v2.2-a14b/image-to-video/lora, fal-ai/wan/v2.2-5b/text-to-video, 2026-11-09): boolean, default false. "If set to true, output video will be checked for safety after generation."',
+  },
   disable_safety_checker: {
     field: 'disable_safety_checker',
     type: 'boolean',

@@ -306,8 +306,77 @@ describe('safety-switch choices on the wire (registered submit route)', () => {
       expect(sent.enable_safety_checker).toBe(false);
       expect(data.actualRequest.parameters.disable_safety_checker).toBe(true);
       expect(data.actualRequest.parameters.enable_safety_checker).toBe(false);
+      const nsfwMappings = data.actualRequest.mapping.filter((m: any) => String(m.from).startsWith('nsfw_policy.'));
+      expect(nsfwMappings).toEqual([
+        expect.objectContaining({
+          from: 'nsfw_policy.disable_safety_checker',
+          to: 'disable_safety_checker',
+          value: true,
+          source: 'user',
+          note: expect.stringMatching(/custom_parameters.*未由后端注入/),
+        }),
+        expect.objectContaining({
+          from: 'nsfw_policy.enable_safety_checker',
+          to: 'enable_safety_checker',
+          value: false,
+          source: 'user',
+          note: expect.stringMatching(/custom_parameters.*未由后端注入/),
+        }),
+      ]);
     });
   });
+});
+
+describe('catalog-silent video routing', () => {
+  const routes = [
+    { provider: 'aimlapi', image: 'https://api.aimlapi.com/v1/images/generations', video: 'https://api.aimlapi.com/v2/video/generations' },
+    { provider: 'venice', image: 'https://api.venice.ai/api/v1/image/generate', video: 'https://api.venice.ai/api/v1/video/queue' },
+  ];
+  for (const { provider, image, video } of routes) {
+    for (const catalog of ['failed', 'empty', 'missing-model', 'declared-image']) {
+      it.each([true, false, undefined])(`${provider}: ${catalog} catalog with isVideo=%s preserves route, mediaKind and upstream failure`, async (isVideo) => {
+        const model = 'user-selected-model';
+        const upstreamError = '{"error":{"message":"Invalid API key"}}';
+        const calls: Array<{ url: string; init?: RequestInit }> = [];
+        const app = express();
+        registerSchemaProviderRoutes(app as any, {
+          fetch: async (_m: any, url: string, init?: RequestInit) => {
+            calls.push({ url, init });
+            if (init?.method === 'POST') return new Response(upstreamError, { status: 401 });
+            if (!url.includes('/models')) return json({});
+            if (catalog === 'failed') return new Response('{"error":{"message":"Unauthorized"}}', { status: 401 });
+            return json({ data: catalog === 'empty' ? [] : [{ id: catalog === 'declared-image' ? model : 'other-model', type: 'image' }] });
+          },
+          key: () => 'k', record: (i: any) => i, durable: async (u: string) => ({ ok: true, dataUrl: u }),
+        } as any);
+        const expectedVideo = isVideo === true && catalog !== 'declared-image';
+        const endpoint = expectedVideo ? video : image;
+        const body = { model, prompt: 'A red paper boat drifting across a misty lake, cinematic wide shot', ...(isVideo === undefined ? {} : { isVideo }) };
+
+        const schemaLayer = (app as any)._router.stack.find((l: any) => l.route?.path === '/api/model-schema');
+        let schema: any;
+        const schemaRes: any = { statusCode: 200, status(c: number) { this.statusCode = c; return this; }, json(p: any) { schema = p; return this; } };
+        await schemaLayer.route.stack[0].handle({
+          method: 'GET', path: '/api/model-schema', params: {}, query: { provider, model }, headers: {}, body,
+        }, schemaRes, () => {});
+        expect(schemaRes.statusCode).toBe(200);
+        expect(schema).toMatchObject({ endpoint, mediaKind: expectedVideo ? 'video' : 'image' });
+        if (catalog === 'failed') expect(schema.catalogLookupFailure).toMatchObject({ upstreamStatus: 401, upstreamResponseBody: '{"error":{"message":"Unauthorized"}}' });
+
+        const submitLayer = (app as any)._router.stack.find((l: any) => l.route?.path === '/api/schema-provider/:provider/submit');
+        let data: any;
+        const submitRes: any = { statusCode: 200, status(c: number) { this.statusCode = c; return this; }, json(p: any) { data = p; return this; } };
+        await submitLayer.route.stack[0].handle({
+          method: 'POST', path: `/api/schema-provider/${provider}/submit`, params: { provider }, query: {}, headers: {}, body,
+        }, submitRes, () => {});
+        expect(calls.filter(c => c.init?.method === 'POST').map(c => c.url)).toEqual([endpoint]);
+        expect(submitRes.statusCode).toBe(401);
+        expect(data.rawResponse).toBe(upstreamError);
+        expect(data.actualRequest.endpoint).toBe(endpoint);
+        if (catalog === 'failed') expect(data.actualRequest.catalogLookupFailure.upstreamStatus).toBe(401);
+      });
+    }
+  }
 });
 
 describe('Sogni LoRA catalog covers', () => {

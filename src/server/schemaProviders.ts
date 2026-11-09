@@ -1617,7 +1617,8 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
     if(provider==='aimlapi') {
       const {rows,sourceUrl}=await listForSchema(req,provider,credential);
       const entry:any=rows.find((x:any)=>x.id===model) ?? {id:model,notInCatalog:true}; // not in catalog: send the user's model id; upstream decides
-      const isVideo=entry.type==='video' || entry.category==='text-to-video';
+      const catalogSilent=rows.length===0 && Boolean(catalogFailures.get(req));
+      const isVideo=entry.type==='video' || entry.category==='text-to-video' || ((catalogSilent || entry.notInCatalog===true) && req.body?.isVideo===true);
       const endpoint=isVideo?(schemaProviders.aimlapi as any).videoRoot+'/video/generations':schemaProviders.aimlapi.root+'/images/generations';
       // Official per-model OpenAPI only: catalog info.docsJson (api.aimlapi.com/docs-json?model=…).
       // Iron rule 3: no static snapshot fallback — missing/failed docs-json → local 400 (没有发出去) with URL + upstream status/body verbatim.
@@ -1655,7 +1656,8 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
     if(provider==='venice') {
       const {rows,sourceUrl}=await listForSchema(req,provider,credential);
       const entry:any=rows.find((x:any)=>x.id===model) ?? {id:model,notInCatalog:true}; // not in catalog: send the user's model id; upstream decides
-      const isVideo=entry.type==='video' || /video/i.test(entry.category||'');
+      const catalogSilent=rows.length===0 && Boolean(catalogFailures.get(req));
+      const isVideo=entry.type==='video' || /video/i.test(entry.category||'') || ((catalogSilent || entry.notInCatalog===true) && req.body?.isVideo===true);
       const endpoint=schemaProviders.venice.root+(isVideo?'/video/queue':'/image/generate');
       const specUrl=officialOpenApiSources.venice;const opPath=isVideo?'/video/queue':'/image/generate';
       const base=openApiPathRequestSchema(await readOfficialSpec(req,provider,'Venice',model,specUrl),opPath);
@@ -1918,15 +1920,15 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
         mapping.push({from:'custom_parameters.'+key,to:key,value,overrides:Object.hasOwn(payload,key)?payload[key]:undefined,schemaDeclared:declared});
       }
       Object.assign(payload,custom);
-      // If declared in live schema and not explicitly overridden, default to permissive value.
       const nsfwApplied = applyNsfwDefaultsToPayload(payload, props);
       for (const item of nsfwApplied) {
         mapping.push({
           from: 'nsfw_policy.' + item.field,
           to: item.field,
           value: item.value,
+          source: 'user',
           schemaDeclared: true,
-          note: `官方 Schema 声明安全开关字段，默认放开（来源: ${item.docUrl}）`,
+          note: `请求 custom_parameters 已提供安全开关值；后端仅审计，未由后端注入默认值（官方来源: ${item.docUrl}）`,
         });
       }
       if(provider==='sogni') {
