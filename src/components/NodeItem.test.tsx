@@ -2,12 +2,15 @@
  * @vitest-environment jsdom
  */
 import React, { act } from 'react';
+import { readFileSync } from 'node:fs';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NodeItem } from './NodeItem';
 import { NodeInstance } from '../types/graph';
 import { NODE_DEFINITIONS } from '../constants/nodes';
+import { setFieldCapabilitySchemaLookup } from '../utils/fieldCapability';
+import { getModelSchemaEntry } from '../services/modelSchemaCache';
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -455,6 +458,137 @@ describe('M130: NodeItem refine prompt inline error handling', () => {
     const errorEl = host!.querySelector('[role="alert"], [data-testid="node-refine-error"]');
     expect(errorEl?.textContent).toContain('HTTP 503');
     expect(errorEl?.textContent).toContain('<html>upstream unavailable</html>');
+  });
+});
+
+describe('M148: NodeItem fieldCapability widget visibility & transparency', () => {
+  const json = (path: string) => JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));
+  const falFixture = json('../server/fixtures/fal-openapi-fal-ai__flux-lora.json');
+  const falSchema = falFixture.components.schemas.FluxLoraInput;
+  const falProps = falSchema.properties;
+
+  afterEach(() => {
+    setFieldCapabilitySchemaLookup((p, m) => getModelSchemaEntry(p, m));
+  });
+
+  function makeKSamplerNode(values: Record<string, any> = {}): NodeInstance {
+    const def = NODE_DEFINITIONS.KSampler;
+    return {
+      id: 'test-ksampler-node',
+      type: 'KSampler',
+      title: 'KSampler',
+      pos: { x: 0, y: 0 },
+      width: 320,
+      inputs: def.inputs,
+      outputs: def.outputs,
+      values: {
+        seed: '',
+        steps: 20,
+        cfg: 8,
+        sampler_name: '',
+        scheduler: 'normal',
+        denoise: 1,
+        ...values,
+      },
+      state: 'idle',
+    };
+  }
+
+  function renderWithContext(node: NodeInstance, provider = 'fal', checkpoint = 'fal-ai/flux-lora') {
+    return renderToStaticMarkup(
+      <NodeItem
+        node={node}
+        isSelected={false}
+        zoom={1}
+        currentProvider={provider}
+        currentCheckpoint={checkpoint}
+        onSelect={vi.fn()}
+        onStartDrag={vi.fn()}
+        onUpdateValue={vi.fn()}
+        onDeleteNode={vi.fn()}
+        onToggleCollapse={vi.fn()}
+        onToggleBypass={vi.fn()}
+        onStartConnecting={vi.fn()}
+        onEndConnecting={vi.fn()}
+      />
+    );
+  }
+
+  it('1. 静态 unsupported (取 providerSchema.ts 真实行 fal-ai/flux-lora sampler) ⇒ widget 不存在且运行不禁用', () => {
+    // sampler on fal fal-ai/flux-lora is statically unsupported; when empty, sampler widget must not exist
+    const node = makeKSamplerNode({ sampler_name: '' });
+    const html = renderWithContext(node, 'fal', 'fal-ai/flux-lora');
+    expect(html).not.toContain('widget-label-sampler_name');
+    expect(html).not.toContain('aria-label="sampler_name"');
+  });
+
+  it('2. fal 开放 schema 缺字段 (仓库内 fal-openapi fixture) ⇒ widget 存在且有未确认标识', () => {
+    setFieldCapabilitySchemaLookup((p, m) => {
+      if (p === 'fal' && m === 'fal-ai/flux-lora') {
+        return {
+          status: 'ready',
+          properties: Object.keys(falProps),
+          propertiesObj: falProps,
+          inputSchema: falSchema,
+        };
+      }
+      return undefined;
+    });
+
+    // denoise is not in fal FluxLoraInput properties; since FluxLoraInput has no additionalProperties:false, it is unknown
+    const node = makeKSamplerNode({ denoise: 1 });
+    const html = renderWithContext(node, 'fal', 'fal-ai/flux-lora');
+    expect(html).toContain('widget-label-denoise');
+    expect(html).toContain('field-unconfirmed-denoise');
+    expect(html).toContain('未确认');
+  });
+
+  it('3. 别名命中 (steps -> num_inference_steps) ⇒ supported 正常渲染无未确认标识', () => {
+    setFieldCapabilitySchemaLookup((p, m) => {
+      if (p === 'fal' && m === 'fal-ai/flux-lora') {
+        return {
+          status: 'ready',
+          properties: Object.keys(falProps),
+          propertiesObj: falProps,
+          inputSchema: falSchema,
+        };
+      }
+      return undefined;
+    });
+
+    // steps aliases to num_inference_steps in falProps, so it is supported
+    const node = makeKSamplerNode({ steps: 25 });
+    const html = renderWithContext(node, 'fal', 'fal-ai/flux-lora');
+    expect(html).toContain('widget-label-steps');
+    expect(html).not.toContain('field-unconfirmed-steps');
+  });
+
+  it('4. schema loading/error ⇒ 显示且标未确认', () => {
+    setFieldCapabilitySchemaLookup((p, m) => {
+      if (p === 'fal' && m === 'fal-ai/flux-lora') {
+        return { status: 'loading' };
+      }
+      return undefined;
+    });
+
+    const node = makeKSamplerNode({ steps: 20 });
+    const html = renderWithContext(node, 'fal', 'fal-ai/flux-lora');
+    expect(html).toContain('widget-label-steps');
+    expect(html).toContain('field-unconfirmed-steps');
+    expect(html).toContain('未确认');
+  });
+
+  it('5. unsupported 但已有值 ⇒ 提示可见且值未被清空', () => {
+    const node = makeKSamplerNode({ sampler_name: 'euler' });
+    const html = renderWithContext(node, 'fal', 'fal-ai/flux-lora');
+    // Notice must be visible containing: field name + current value + 本次不发送 + static-spec
+    expect(html).toContain('unsupported-notice-sampler_name');
+    expect(html).toContain('sampler_name');
+    expect(html).toContain('euler');
+    expect(html).toContain('本次不发送');
+    expect(html).toContain('static-spec');
+    // Value on node must not be cleared
+    expect(node.values.sampler_name).toBe('euler');
   });
 });
 

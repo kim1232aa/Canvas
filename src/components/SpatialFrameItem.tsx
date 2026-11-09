@@ -20,7 +20,9 @@ import { RefineModelPicker } from './ParameterInspector';
 import { SpatialFrame, ComfyParameters } from '../types/graph';
 import { refinePromptWithGemini, getRefineModelSelection } from '../services/api';
 import { validateModelCompatibility } from '../utils/baseModelMatcher';
-import {isCanvasFieldUnsupported, LORA_UNSUPPORTED_TITLE } from '../utils/resolveCheckpoint';
+import { isCanvasFieldUnsupported, LORA_UNSUPPORTED_TITLE } from '../utils/resolveCheckpoint';
+import { fieldCapability } from '../utils/fieldCapability';
+import { resolveAIVideoModelProvider } from '../utils/videoProvider';
 import { getSpatialFrameLoraBanner } from '../utils/spatialFrameLoraBanner';
 import { friendlyProviderLabel,
   isNonComfyCloudProvider,
@@ -58,6 +60,43 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
 }) => {
   const [isRefining, setIsRefining] = useState(false);
   const [refineError, setRefineError] = useState<string | null>(null);
+
+  const rawProvider = frame.params.targetProvider;
+  const resolvedProvider = (rawProvider === 'video'
+    ? (frame.params.videoProvider || (frame.params as any).video_provider || resolveAIVideoModelProvider(frame.params.checkpoint))
+    : rawProvider) || '';
+  const effectiveProvider = resolvedProvider === 'video' ? '' : resolvedProvider;
+  const checkpointModel = frame.params.checkpoint;
+
+  const samplerCap = fieldCapability(effectiveProvider, checkpointModel, 'sampler');
+  const schedulerCap = fieldCapability(effectiveProvider, checkpointModel, 'scheduler');
+  const stepsCap = fieldCapability(effectiveProvider, checkpointModel, 'steps');
+  const cfgCap = fieldCapability(effectiveProvider, checkpointModel, 'cfg');
+  const seedCap = fieldCapability(effectiveProvider, checkpointModel, 'seed');
+  const denoiseCap = fieldCapability(effectiveProvider, checkpointModel, 'denoise');
+
+  const filledParamValue = (v: unknown) =>
+    v !== undefined && v !== null && !(typeof v === 'string' && v.trim() === '') && !(typeof v === 'number' && Number.isNaN(v)) && !(Array.isArray(v) && v.length === 0);
+
+  const unsupportedItems: Array<{ field: string; label: string; value: unknown; source: string }> = [];
+  if (samplerCap.capability === 'unsupported' && filledParamValue(frame.params.sampler)) {
+    unsupportedItems.push({ field: 'sampler', label: '采样器 (sampler)', value: frame.params.sampler, source: samplerCap.source });
+  }
+  if (schedulerCap.capability === 'unsupported' && filledParamValue(frame.params.scheduler)) {
+    unsupportedItems.push({ field: 'scheduler', label: '调度器 (scheduler)', value: frame.params.scheduler, source: schedulerCap.source });
+  }
+  if (stepsCap.capability === 'unsupported' && filledParamValue(frame.params.steps)) {
+    unsupportedItems.push({ field: 'steps', label: '步数 (steps)', value: frame.params.steps, source: stepsCap.source });
+  }
+  if (cfgCap.capability === 'unsupported' && filledParamValue(frame.params.cfg)) {
+    unsupportedItems.push({ field: 'cfg', label: 'CFG (cfg)', value: frame.params.cfg, source: cfgCap.source });
+  }
+  if (seedCap.capability === 'unsupported' && filledParamValue(frame.params.seed)) {
+    unsupportedItems.push({ field: 'seed', label: '随机种子 (seed)', value: frame.params.seed, source: seedCap.source });
+  }
+  if (denoiseCap.capability === 'unsupported' && filledParamValue(frame.params.denoise)) {
+    unsupportedItems.push({ field: 'denoise', label: '重绘幅度 (denoise)', value: frame.params.denoise, source: denoiseCap.source });
+  }
 
   // Soft-3: keep LoRA values when unsupported (grey + omit from payload). Only retitle marketing chrome.
   useEffect(() => {
@@ -97,7 +136,7 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
   };
 
   const handleRerollSeed = () => {
-    if (isCanvasFieldUnsupported(frame.params.targetProvider, frame.params.checkpoint, 'seed')) return;
+    if (seedCap.capability === 'unsupported') return;
     onUpdateFrame(frame.id, {
       params: {
         ...frame.params,
@@ -168,11 +207,23 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
         </div>
       </div>
 
+      {/* Unsupported parameter notices for transparency (when values are present) */}
+      {unsupportedItems.length > 0 && (
+        <div data-testid="spatial-unsupported-notices" className="px-3.5 py-1.5 bg-[#181215] border-b border-rose-900/40 flex flex-col gap-1 text-[10px] font-mono">
+          {unsupportedItems.map((item) => (
+            <div key={item.field} data-testid={`spatial-unsupported-notice-${item.field}`} className="flex items-center justify-between text-slate-300">
+              <span>{item.label}: <strong className="text-slate-100">{String(item.value)}</strong></span>
+              <span className="text-amber-300 font-semibold">本次不发送 ({item.source})</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Parameter Quick Bar — non-Comfy engines never show leftover Comfy sampler badges */}
       <div className="px-3.5 py-1.5 bg-[#181922] border-b border-[#22242e] flex items-center justify-between text-[10px] font-mono text-slate-300 overflow-x-auto gap-2">
         <div className="flex items-center gap-2 truncate">
           {(() => {
-            const p = frame.params.targetProvider;
+            const p = effectiveProvider || frame.params.targetProvider;
             const m = frame.params.checkpoint;
             const modelLabel = spatialFrameModelLabel(p, m);
             const nonComfy = isNonComfyCloudProvider(p);
@@ -199,58 +250,71 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
               </span>
             );
           })()}
-          {!isNonComfyCloudProvider(frame.params.targetProvider) && <span>·</span>}
-          {(() => {
-            const p = frame.params.targetProvider;
-            const m = frame.params.checkpoint;
-            const nonComfy = isNonComfyCloudProvider(p);
-            // Non-Comfy: force-grey leftover Comfy sampler/steps/CFG (never advertise FLUX euler 25步)
-            const greySampler = nonComfy || isCanvasFieldUnsupported(p, m, 'sampler');
-            const greyScheduler = nonComfy || isCanvasFieldUnsupported(p, m, 'scheduler');
-            const greySteps = nonComfy || isCanvasFieldUnsupported(p, m, 'steps');
-            const greyCfg = nonComfy || isCanvasFieldUnsupported(p, m, 'cfg');
-            if (nonComfy) {
-              // Omit Comfy sampler/steps/CFG chips entirely for Gemini/compat — show only seed side
-              return null;
-            }
-            const chip = (unsupported: boolean, label: string, field: string) => unsupported ? (
-                <span className="text-slate-500 flex items-center gap-1" aria-label={field}>
-                  <span className="line-through">{label}</span>
-                  <FieldStatusBadge status="unsupported" />
-                </span>
-              ) : (
-                <span>{label}</span>
-              );
-            return (
-              <>
-                {chip(
-                  greySampler || greyScheduler,
-                  `${frame.params.sampler || '未指定'} (${frame.params.scheduler || '未指定'})`,
-                  greySampler && !greyScheduler ? 'sampler' : greyScheduler && !greySampler ? 'scheduler' : 'sampler'
-                )}
-                <span>·</span>
-                {chip(greySteps, frame.params.steps !== undefined ? `${frame.params.steps}步` : '未设置', 'steps')}
-                <span>·</span>
-                {chip(greyCfg, frame.params.cfg !== undefined ? `CFG ${frame.params.cfg}` : '未设置', 'cfg')}
-              </>
-            );
-          })()}
+          {!isNonComfyCloudProvider(effectiveProvider || frame.params.targetProvider) && (
+            <>
+              {!(samplerCap.capability === 'unsupported' && schedulerCap.capability === 'unsupported') && (
+                <>
+                  <span>·</span>
+                  <span data-testid="spatial-chip-sampler" className="flex items-center gap-1">
+                    <span>{`${frame.params.sampler || '未指定'} (${frame.params.scheduler || '未指定'})`}</span>
+                    {(samplerCap.capability === 'unknown' || schedulerCap.capability === 'unknown') && (
+                      <span className="text-[9px] px-1 py-0.2 rounded bg-amber-950/40 border border-amber-500/50 text-amber-300 font-mono">未确认</span>
+                    )}
+                  </span>
+                </>
+              )}
+              {stepsCap.capability !== 'unsupported' && (
+                <>
+                  <span>·</span>
+                  <span data-testid="spatial-chip-steps" className="flex items-center gap-1">
+                    <span>{frame.params.steps !== undefined ? `${frame.params.steps}步` : '未设置'}</span>
+                    {stepsCap.capability === 'unknown' && (
+                      <span className="text-[9px] px-1 py-0.2 rounded bg-amber-950/40 border border-amber-500/50 text-amber-300 font-mono">未确认</span>
+                    )}
+                  </span>
+                </>
+              )}
+              {cfgCap.capability !== 'unsupported' && (
+                <>
+                  <span>·</span>
+                  <span data-testid="spatial-chip-cfg" className="flex items-center gap-1">
+                    <span>{frame.params.cfg !== undefined ? `CFG ${frame.params.cfg}` : '未设置'}</span>
+                    {cfgCap.capability === 'unknown' && (
+                      <span className="text-[9px] px-1 py-0.2 rounded bg-amber-950/40 border border-amber-500/50 text-amber-300 font-mono">未确认</span>
+                    )}
+                  </span>
+                </>
+              )}
+              {filledParamValue(frame.params.denoise) && denoiseCap.capability !== 'unsupported' && (
+                <>
+                  <span>·</span>
+                  <span data-testid="spatial-chip-denoise" className="flex items-center gap-1">
+                    <span>{`降噪 ${frame.params.denoise}`}</span>
+                    {denoiseCap.capability === 'unknown' && (
+                      <span className="text-[9px] px-1 py-0.2 rounded bg-amber-950/40 border border-amber-500/50 text-amber-300 font-mono">未确认</span>
+                    )}
+                  </span>
+                </>
+              )}
+            </>
+          )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          {(() => {
-            return (
-              <button
-                type="button"
-                onClick={handleRerollSeed}
-                className="flex items-center gap-1 text-slate-400 hover:text-white"
-                title="摇随机种子"
-                aria-label="摇随机种子"
-              >
-                <span>{frame.params.seed}</span>
-                <Dices className="w-3 h-3 text-cyan-400" />
-              </button>
-            );
-          })()}
+          {seedCap.capability !== 'unsupported' && (
+            <button
+              type="button"
+              onClick={handleRerollSeed}
+              className="flex items-center gap-1 text-slate-400 hover:text-white"
+              title="摇随机种子"
+              aria-label="摇随机种子"
+            >
+              <span>{frame.params.seed}</span>
+              {seedCap.capability === 'unknown' && (
+                <span className="text-[9px] px-1 py-0.2 rounded bg-amber-950/40 border border-amber-500/50 text-amber-300 font-mono">未确认</span>
+              )}
+              <Dices className="w-3 h-3 text-cyan-400" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -480,9 +544,10 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
             ? `${frame.params.civitaiEngine}:${frame.params.civitaiEcosystem}`
             : undefined;
           const loraModelId = civitaiSchemaId || frame.params.checkpoint;
-          const lorasUnsupported = isCanvasFieldUnsupported(frame.params.targetProvider, loraModelId, 'loras');
+          const lorasCap = fieldCapability(effectiveProvider, loraModelId, 'loras');
+          const lorasUnsupported = lorasCap.capability === 'unsupported';
           const banner = getSpatialFrameLoraBanner(
-            frame.params.targetProvider,
+            effectiveProvider,
             loraModelId,
             frame.params.loras as Array<{ name: string; baseModel?: string; modelStrength?: number }>
           );
@@ -496,6 +561,14 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
                   title={banner?.message || LORA_UNSUPPORTED_TITLE}
                 >
                   {LORA_UNSUPPORTED_TITLE}
+                </span>
+              )}
+              {lorasCap.capability === 'unknown' && (
+                <span
+                  className="text-[9px] px-1.5 py-0.5 rounded bg-amber-950/40 border border-amber-500/50 text-amber-300 font-mono"
+                  title="未确认该模型是否支持 LoRA"
+                >
+                  未确认
                 </span>
               )}
               {frame.params.loras.map((l, i) => {
