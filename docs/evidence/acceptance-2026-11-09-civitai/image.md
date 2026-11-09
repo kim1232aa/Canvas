@@ -65,13 +65,13 @@
 ## 产物
 
 - 图像产物：**无**。上游在生成前因 `insufficientBuzz` 拒绝，未返回 workflow ID、图片 URL 或 blob；没有可合法保存、播放、下载或从历史重提的图像。
-- 截图（均真实存在于本目录）：
+- 截图（均真实存在于本目录，各截图拍摄时机与操作事件时序详见 [operation-events.md](./operation-events.md)）：
   - `docs/evidence/acceptance-2026-11-09-civitai/01-preset-picker.png` — 253,813 bytes — SHA-256 `ec6feb7add578bdb574704a69112c90a3cbfe50697b9add1b5f3f16dcf68781e`
   - `docs/evidence/acceptance-2026-11-09-civitai/02-civitai-preset-cards.png` — 218,474 bytes — SHA-256 `b810fd585f9802c981b12130ba9128514e667a2ac47c243edadeec1e8d3ee106`
   - `docs/evidence/acceptance-2026-11-09-civitai/04-civitai-image-preset-canvas.png` — 224,469 bytes — SHA-256 `50e137c9179d5585e80b0688a4c4e9e5a3659c598eb04ac3d4f4327c2406a562`
   - `docs/evidence/acceptance-2026-11-09-civitai/05-civitai-image-all-params-filled.png` — 236,048 bytes — SHA-256 `b4b41ef8d17f4a25c532e78bde77d2e2c2be64117c69d5ff4c0d272708735540`
   - `docs/evidence/acceptance-2026-11-09-civitai/06-civitai-image-run-started.png` — 281,776 bytes — SHA-256 `b0ff3a0c6e6782a412741b7a77b6c4f862f0b97b785c3ddffacfd208891d4835`
-  - `docs/evidence/acceptance-2026-11-09-civitai/07-civitai-image-run-result.png` — 283,662 bytes — SHA-256 `440752ee210f1309b570e47dd24db735e0d2a0344518350488489530673d049`
+  - `docs/evidence/acceptance-2026-11-09-civitai/07-civitai-image-run-result.png` — 283,662 bytes — SHA-256 `440752ee210f1309b570e47dd24db7350e2d9a0344518350488489530673d049`
   - `docs/evidence/acceptance-2026-11-09-civitai/08-civitai-image-execution-log-error.png` — 274,226 bytes — SHA-256 `a93de479ac2165639260cb9f6df3084ed13b12a6a5073820c31f0aec7af03b01`
 
 ## 搜索记录

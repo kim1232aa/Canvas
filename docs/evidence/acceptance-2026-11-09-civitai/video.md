@@ -73,7 +73,7 @@
 ## 产物
 
 - 视频产物：**无**。没有返回视频 blob、URL 或 workflow ID；因此没有播放、下载、历史详情确认或历史重提操作。上述后续动作仅在生成成功时适用，本次标为未验证。
-- 截图（均真实存在于本目录）：
+- 截图（均真实存在于本目录，各截图拍摄时机与操作事件时序详见 [operation-events.md](./operation-events.md)）：
   - `docs/evidence/acceptance-2026-11-09-civitai/09-civitai-video-t2v-preset-loaded.png` — 161,804 bytes — SHA-256 `ca82fc029a99a0fa6eb293a8e21755b3d5e7549634948446c96580e8cbb0151a`
   - `docs/evidence/acceptance-2026-11-09-civitai/10-civitai-video-parameters.png` — 217,854 bytes — SHA-256 `1763951412849e969aafb665c82abb409885a3863b8a3a4635a3ac6b42087455`
   - `docs/evidence/acceptance-2026-11-09-civitai/11-civitai-video-canvas-filled.png` — 160,008 bytes — SHA-256 `c3811d67e1bdf7d43deac1139a36b36ca9fa5bae8eca5e040843e18985568d85`
