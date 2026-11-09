@@ -1,5 +1,129 @@
 # ComfyCanvas Studio：开发交接、产品缺口与验收手册
 
+## 2026-11-09 当前终态总览（Tower 主控交接）
+
+> 本节由 Tower 主控在本轮实测后写入。**2026-11-08 及更早的章节一律不再作为事实依据**：其中相当一部分结论来自子 agent 自述、curl/脚本直连，或未被主控独立复核。需要判断当前系统能力时，以本节 + `docs/evidence/2026-11-09-*` 为准。
+
+### 1. 代码基线（实测）
+
+- 分支 `main`，HEAD `8d53843`（Merge `feat/fixtest146-per-suite-timeout-for-heavy-f`）。
+- `origin/main` 落后本地 **11 个提交**：`git rev-list --left-right --count origin/main...main` → `0	11`。即本轮已合并修复尚未推送。
+- 工作区在写本文时为 clean（`git status --porcelain` 无输出）。
+- Tower 任务账目：150 个任务，**136 merged / 8 abandoned / 6 open**。
+  - **open 且有 worker 死亡**：M140、M147、M148、M149。
+  - **open 且未派发**：M142、M144。
+  - **abandoned**：M8、M13、M141 等 8 个，不可重开，需要时按新任务重规划。
+
+### 2. 本轮已合并的修复（主控逐条核对 diff 后合并）
+
+| 任务 | 提交 | 实际内容 |
+| --- | --- | --- |
+| M130 | `673ac34` | 预设「载入并立即运行」清除陈旧 `selectedNodeId`；节点内 AI 润色失败改为行内提示，不再 `window.alert` |
+| M129 | `865fd73` | `AIVideoNode` 的 `sampler` / `scheduler` 提取并映射到官方 schema 字段，真实出站可见 |
+| M132 | `0dedf6b` | Civitai 视频 NSFW 请求路径与 `videoOmitted` 测试对齐 |
+| M138 | `f2ade44` | 5 个 driver 错误路径改用 `httpErrorFromResponse`，保留数字 `status` + 原始 `responseBody` + 解析后 `data` |
+| M143 | `cdc8d7a` | `normalizeLoraPayloadItem` 传入真实目标 provider，修复 Civitai LoRA 到 Fal/WaveSpeed 时丢 `downloadUrl` / `path` |
+| M145 | `c88fec3` | 新增 `src/utils/fieldCapability.ts`：返回 `supported` / `unsupported` / `unknown`；live schema 命中→supported，明确闭合 schema 缺字段→unsupported，开放/加载中/失败→unknown；`custom_parameters` 不自动视为 supported |
+| M139 | `f75d272` | 删除 `missingKeyMatch` 生产正则、`missing-key:` 状态哨兵、`maskWalletAddresses`；改用结构化 `errorKind` / `errorProvider` / 数字 HTTP status |
+| M146 | `ee8ad36` | 重型 full-App 测试套件加 `timeout: 30000`，消除负载下的假超时 |
+
+### 3. 已确证的违规与不可信项（用户要求：旧文档不能当事实）
+
+1. **M53 的争议已用原始日志核实**：用户截图显示其 worker 在可见窗口内反复 `cd /tmp && curl`、`python3 -c`、`grep`，未见搜索调用。但核对该 agent 的原始 wire 日志（`agent-262` / `worker-modelhub53-deepseek`）：`mcp__tavily__tavily_search` 12 次、`mcp__9router__search` 10 次、`mcp__agy-search__search_web` 5 次、`FetchURL` 15 次，其 survey 报告也含 `## 搜索记录` 段（含打开 URL 与失败原因）。结论：**M53 全程并非零搜索**，截图对应的是会话后段用 curl/脚本做 live 探针的窗口；但「live API 探针」不能替代 UI 点击验收，其模型中心相关结论仍按 **未验证** 处理，除非有 UI 证据。
+2. **「API 通过」被当成「UI 通过」**：历史上多次以 curl / 脚本请求代替前端点击。二者不等价；唯一验收标准仍是 UI 实际点击 + 可见产物。
+3. **非黑即白式改造**：把「该供应商不支持某参数」实现成后端全量拦截，而不是前端按 provider schema 隐藏/禁用该输入。这是匹配问题，不是权限问题；多个供应商都要按各自 schema 匹配，不能一刀切。
+4. **旧文档的完成度声明**：`HANDOFF.md` 2026-11-08 及更早、`PROGRESS`、各类 `docs/evidence/*-2026-10-*` 中的「已完成 / 全量 / 100%」表述均需重新取证后才可采信。
+
+### 4. 本轮取证的关键技术事实（附搜索记录于文末）
+
+- **Civitai Orchestration**：资源用 AIR（`urn:air:<eco>:<kind>:civitai:<modelId>@<versionId>`）；LoRA 为 `loras: [{ air, strength }]`，strength 默认 1.0、可到 2；视频步骤字段含 `engine` / `version` / `provider` / `cfgScale` / `steps` / `fps` / `duration` / `sampler` / `scheduler` / `width` / `height` / `shift`。
+- **Fal**：LoRA 为 `loras: [{ path, scale }]`，`scale` 默认 1.0，且支持 `{layer_name: scale}` 的 per-layer 字典；尺寸走 `image_size` 枚举或 `{width,height}` 对象。`fal-ai/krea-2/turbo/lora` 这类端点**不声明** `negative_prompt` / `num_inference_steps` / `guidance_scale`。
+- **Runware**：LoRA 用 `civitai:<modelId>` 形式 + `weight`；LoRA 类目另有 `defaultWeight`、`positiveTriggerWords` 等字段。
+- **ComfyUI 原生**：`model_strength` 与 `clip_strength` 分离，默认均 1.0。
+- **架构不匹配是真实失败类型**：FLUX LoRA 被 SDXL loader 拒绝属于架构不匹配，不是文件损坏；ComfyUI 也有「LoRA shape mismatch 应快速失败而非污染 GPU 状态」的 issue。跨供应商配对必须校验底座架构（SD1.5 / SDXL / Pony / Illustrious / FLUX / Wan 等），不能「有 LoRA 就发」。
+- **前端正确做法**：schema-driven UI —— 由 provider schema 的 `supportedFields` / live schema 过滤渲染，切换供应商时同步剪枝已填但不再支持的参数，避免「幽灵参数」被静默丢弃或静默发送。
+
+### 5. 未完成项与下一步（按优先级）
+
+**P0（阻断产品可用性）**
+1. 重派 **M140 / M147 / M148 / M149**。四个 worker 全部死于同一系统性错误：`9router/gpt-6.1-sol` 返回 `[400] {"error":{"message":"Unsupported parameter: reasoning_effort"}}`。**禁止用同一模型 resume**；改用可用模型并把该错误写进 briefing 的已知事实。
+2. M147/M148 的本质是把已合并的 `fieldCapability()` 接到参数检查器、节点与空间画板：只有 `unsupported` 才隐藏，`unknown` 保持可见并标注。
+3. 派发 **M142 / M144**（已规划未执行）。
+
+**P1（用户点名的缺口）**
+4. 跨供应商 LoRA 匹配器（`civitaiWorkflowRoute.ts`、`civitaiTargetSchema.ts`）接入真实能力数据：目标供应商支持哪些参数、哪些 LoRA 形态、底座架构是否兼容；不匹配要在导入预览里明确写「为何不发 / 改发什么」，不得静默丢弃。
+5. 视频生成工作流整体缺口：文生视频 / 图生视频预设与供应商下拉的一致性、异步轮询窗口、长任务同步等待问题。
+6. 模型中心完整度：目录来源、分页语义、未知架构可见性（M149 范围）。
+
+**P2（体验与结构）**
+7. 前端 UI 人性化：参数抽屉、节点、空间画板的字段可见性与文案。
+8. 架构结构化 / 解耦 / 模块化：统一 provider registry，避免在多个组件里各写一份供应商白名单。
+
+### 6. 本轮验证状态（`main@8d53843`，主控亲自执行，2026-11-09）
+
+| 命令 | 退出码 | 结果 |
+| --- | --- | --- |
+| `npm run build` | **0** | 前端 dist + Sites Worker 构建成功 |
+| `npx tsc --noEmit` | **0** | 无类型错误 |
+| `npx vitest run --maxWorkers=2 --exclude '.tower/**' --exclude '**/node_modules/**' --exclude '**/dist/**'` | **1** | **290 文件 / 2665 用例：3 failed，2662 passed**，耗时 177.5s |
+
+**3 个真实失败（不允许忽略，也不允许改成绿）**：
+
+1. `src/App.test.tsx > M139 … keeps 0x+40 hex error strings verbatim`
+   - 期望 toast 首行 `HTTP 402 Payment Required: Account 0x… has insufficient balance`，实得 `Account 0x… has insufficient balance`（丢了状态前缀）。说明 M139 的 `f75d272` 与既有断言不一致：要么实现没保留状态行，要么断言未同步。
+2. `src/server/schemaContract.test.ts > Krea ideogram has no steps/guidance_scale`
+   - `isSchemaOmitCandidate('krea', 'steps', …)` 期望 `true`，实得 `false`。
+3. `src/server/wavespeedKreaTogetherLora.test.ts > WaveSpeed Krea family badges`
+   - `isSchemaOmitCandidate` 对 `width/height/output_format/steps/cfg` 期望 `true`，实得 `false`。
+
+2、3 指向同一处：`isSchemaOmitCandidate` 在近期「能力判定」改动后，对「schema 明确未声明」的字段不再返回可省略，与既有契约测试冲突。**在修复前，不得对外宣称「全量测试通过」。**
+
+**其余结论**：本轮没有任何供应商达到 `PASS_GENERATION`；已有 `PASS_BILLING` 仅证明「真实出站 + 上游原文透传」，不代表生成可用。
+
+### 7. 真实 UI 验收现状（2026-11-09 已有证据）
+
+| 路由 | 判定 | 依据 |
+| --- | --- | --- |
+| Civitai `std-civitai-t2v` / `std-civitai-t2i` | **PASS_BILLING** | 真实 headless Chrome 点击运行；`actualRequest` 含 `sampler: euler`、`scheduler: simple`、AIR LoRA（强度 1.0 / 0.85）；上游 `400 insufficientBuzz` 原样展示；5 张截图带 SHA-256。证据：`docs/evidence/acceptance-2026-11-09-postfix/README.md` |
+| Fal `fal-ai/krea-2/turbo/lora` | **PASS_BILLING** | UI 点击载入并运行；实际出站 `loras:[{path, scale:1}]`、`image_size:"square_hd"`、`seed`；上游 `403 {"detail":"User is locked. Reason: TOP_UP."}` 原文透传；2 张截图带 SHA-256。证据：`docs/evidence/acceptance-2026-11-09-fal-hf/fal-t2i.md` |
+| HF → fal-ai（Z-Image + LoRA） | **PASS_BILLING（历史，未在本轮重跑）** | 上游 402 要求充值，参数与 LoRA 已入请求体；不重复计费，未重新验证 |
+
+**仍无任何供应商达到 `PASS_GENERATION`**（本轮没有一次真实出图产物）。这是当前最重要的产品事实。
+
+### 8. 铁律（对所有接手 Agent 生效）
+
+以 `AGENTS.md` 为准，摘要：搜索先行、多 MCP 交叉验证、交付附 `## 搜索记录`；禁止静默容灾 / 回退 / 兜底；禁止硬编码集成；禁止黑盒自愈；唯一验收标准是 **UI 实际点击通过并产生可见产物**；报错必须原样透传；NSFW 开关在官方 schema 真实存在时默认放开。
+
+### 9. 搜索记录（本节取证用）
+
+- 查询词 1：`Civitai API LoRA parameters cross-provider fal runware novita sogni comfyui 2026` —— `mcp__tavily__tavily_search`（advanced），返回 Civitai Orchestration 参考页、ComfyUI Add Lora 节点（`strength` 0–2）、Runware ComfyUI 集成（`civitai:...` + weight）。
+- 查询词 2：`ComfyUI Web Studio image generation provider parameter mismatch lora weight scale 2026` —— `mcp__9router__search`（brave），返回 ComfyUI LoRA 权重/CLIP 强度实践与 shape mismatch issue。
+- 查询词 3：`frontend UI parameter matching provider schema dynamic hide unsupported fields 2026` —— `mcp__agy-search__search_web`，返回 schema-driven UI 的过滤与状态剪枝模式。
+- 查询词 4：`fal.ai API loras array path scale parameter image generation reference` —— `mcp__tavily__tavily_search`（advanced），确认 `LoraWeight` = `{path, scale}`、`scale` 默认 1.0、支持 per-layer 字典。
+- 查询词 5：`Civitai LoRA base model architecture mismatch SDXL Flux API reject incompatible` —— `mcp__9router__search`（brave），返回「FLUX LoRA 被 SDXL loader 拒绝属架构不匹配」「ComfyUI issue #11863 shape mismatch」。
+- 失败记录：`mcp__tavily__tavily_search` 一次返回 **HTTP 429**（超出请求频率），已按阶梯切换 9router 成功；`mcp__plugin-kimi-web-tools_web__web_fetch` 三次失败（网关守护 8s 未就绪 / session 校验），改用搜索摘要 + 已有官方页面证据，**未打开原文的部分已在上面逐条标注为来自搜索摘要**。
+
+### 10. 本轮实测日志
+
+```
+$ npm run build
+✓ built in 3.32s
+Canvas Sites Worker built: original provider routes + durable storage
+build_exit=0
+
+$ npx tsc --noEmit
+tsc_exit=0
+
+$ npx vitest run --maxWorkers=2 --exclude '.tower/**' --exclude '**/node_modules/**' --exclude '**/dist/**'
+ Test Files  3 failed | 287 passed (290)
+      Tests  3 failed | 2662 passed (2665)
+test_exit=1
+```
+
+原始日志：`/tmp/canvas-verify-build.log`、`/tmp/canvas-verify-tsc.log`、`/tmp/canvas-verify-test.log`（临时文件，不入库）。
+
+---
+
 ## 2026-11-08 当前终态总览（M46 真实浏览器点击验收完成，主分支已全量合并 M77/M81/M82/M83）
 
 - **最新代码基准**：`main` @ `dadb08f`（已合并 M77 跨供应商导入、M81 视频全生态对齐、M82 视频下拉与底模过滤、M83 Gemini 矩阵解耦与诚实规范，以及最高搜索防呆铁律）。
