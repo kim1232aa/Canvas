@@ -182,7 +182,7 @@ export class VideoDriver extends BaseEngineDriver {
       loras: params.loras?.length ? params.loras : undefined,
       width: params.width,
       height: params.height,
-      sampler_name: params.sampler_name,
+      sampler_name: params.sampler_name || (params as any).sampler,
       scheduler: params.scheduler,
       denoise: params.denoise,
     })) {

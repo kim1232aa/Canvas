@@ -46,8 +46,10 @@ export class CivitaiDriver extends BaseEngineDriver {
     for (const field of ['engine','ecosystem','comfyModel']) if (params.extraParams?.[field] !== undefined) payload[field] = params.extraParams[field];
     if (params.cfg !== undefined) payload.cfg = params.cfg;
     if (params.seed != null) payload.seed = params.seed;
-    if (params.sampler_name || params.extraParams?.sampler_name) payload.sampler_name = params.sampler_name || params.extraParams?.sampler_name;
-    if (params.scheduler || params.extraParams?.scheduler) payload.scheduler = params.scheduler || params.extraParams?.scheduler;
+    const samplerVal = params.sampler_name || (params as any).sampler || params.extraParams?.sampler_name || params.extraParams?.sampler;
+    const schedulerVal = params.scheduler || params.extraParams?.scheduler;
+    if (samplerVal) payload.sampler_name = samplerVal;
+    if (schedulerVal) payload.scheduler = schedulerVal;
     if (params.image_url) {
       payload.image_url = params.image_url;
       if (params.denoise != null) payload.denoise = params.denoise;

@@ -34,7 +34,7 @@ const officialVideoSchema = {
               fps: { type: 'integer' }, duration: { type: 'integer' }, steps: { type: 'integer' },
               seed: { type: ['null', 'integer'] }, loras: { type: 'array', items: { $ref: '#/components/schemas/VideoGenInputLora' } },
             },
-            discriminator: { propertyName: 'version', mapping: { 'v2.1': '#/components/schemas/Wan21VideoGenInput' } },
+            discriminator: { propertyName: 'version', mapping: { 'v2.1': '#/components/schemas/Wan21VideoGenInput', 'v2.2': '#/components/schemas/Wan22VideoGenInput' } },
             additionalProperties: false,
           },
         ],
@@ -54,6 +54,41 @@ const officialVideoSchema = {
         allOf: [
           { $ref: '#/components/schemas/Wan21VideoGenInput' },
           { required: ['engine', 'provider', 'version'], properties: { engine: { enum: ['wan'] }, provider: { enum: ['civitai'] }, version: { enum: ['v2.1'] }, diffusionModel: { type: 'string' }, sourceImage: { type: ['null', 'string'] }, images: { type: 'array', items: { type: 'string' } }, width: { type: 'integer' }, height: { type: 'integer' }, loras: { type: 'array', items: { $ref: '#/components/schemas/VideoGenInputLora' } } }, additionalProperties: false },
+        ],
+      },
+      Wan22VideoGenInput: {
+        allOf: [
+          { $ref: '#/components/schemas/WanVideoGenInput' },
+          {
+            required: ['engine', 'provider', 'version'],
+            properties: { engine: { enum: ['wan'] }, version: { enum: ['v2.2'] }, provider: { type: 'string' } },
+            discriminator: { propertyName: 'provider', mapping: { comfy: '#/components/schemas/Wan22ComfyVideoGenInput' } },
+            additionalProperties: false,
+          },
+        ],
+      },
+      Wan22ComfyVideoGenInput: {
+        allOf: [
+          { $ref: '#/components/schemas/Wan22VideoGenInput' },
+          {
+            required: ['engine', 'provider', 'version'],
+            properties: {
+              engine: { enum: ['wan'] },
+              provider: { enum: ['comfy'] },
+              version: { enum: ['v2.2'] },
+              diffusionModel: { type: 'string' },
+              sourceImage: { type: ['null', 'string'] },
+              images: { type: 'array', items: { type: 'string' } },
+              width: { type: 'integer' },
+              height: { type: 'integer' },
+              negativePrompt: { type: ['null', 'string'] },
+              sampler: { type: 'string', enum: ['euler', 'dpmpp_2m_sde'] },
+              scheduler: { type: 'string', enum: ['simple', 'karras'] },
+              shift: { type: 'number' },
+              loras: { type: 'array', items: { $ref: '#/components/schemas/VideoGenInputLora' } },
+            },
+            additionalProperties: false,
+          },
         ],
       },
       VideoGenInputLora: { required: ['air', 'strength'], properties: { air: { type: 'string' }, strength: { type: 'number' } }, additionalProperties: false },
@@ -112,8 +147,9 @@ describe('Civitai video request mapping from selected official schema', () => {
       version: 'v2.1',
       provider: 'civitai',
       negative_prompt: 'blur',
-      sampler_name: 'euler',
     });
+    expect(passthrough.payload).not.toHaveProperty('sampler_name');
+    expect(passthrough.payload).not.toHaveProperty('sampler');
     expect(passthrough.unmappedFields).toEqual([
       expect.objectContaining({
         field: 'negative_prompt',
@@ -121,14 +157,56 @@ describe('Civitai video request mapping from selected official schema', () => {
         passthroughAs: 'negative_prompt',
         reason: expect.stringContaining('未声明字段已原样透传'),
       }),
+    ]);
+    expect(passthrough.omitted).toEqual([
       expect.objectContaining({
         field: 'sampler_name',
         value: 'euler',
-        passthroughAs: 'sampler_name',
-        reason: expect.stringContaining('未声明字段已原样透传'),
+        reason: expect.stringContaining('未声明字段未发送'),
       }),
     ]);
+    expect(passthrough.fieldStatus.sampler_name).toBe('omitted');
     expect(() => buildCivitaiVideoInput({ ...body, version: 'v2.7' }, officialVideoSchema)).toThrow(/未列出|不含/);
+  });
+
+  it('maps declared sampler and scheduler for Wan 2.2 Comfy schema, and omits them when unset', () => {
+    const filledBody = {
+      engine: 'wan',
+      version: 'v2.2',
+      provider: 'comfy',
+      model: 'urn:air:wanvideo-22-t2v-a14b:checkpoint:civitai:1817671@2114154',
+      prompt: 'a cinematic orbit around a lighthouse at sunset',
+      sampler_name: 'euler',
+      scheduler: 'simple',
+      fps: 24,
+      cfg: 3,
+      steps: 20,
+    };
+    const mapped = buildCivitaiVideoInput(filledBody, officialVideoSchema);
+    expect(mapped.payload).toMatchObject({
+      engine: 'wan',
+      version: 'v2.2',
+      provider: 'comfy',
+      diffusionModel: filledBody.model,
+      prompt: filledBody.prompt,
+      sampler: 'euler',
+      scheduler: 'simple',
+      cfgScale: 3,
+      steps: 20,
+      fps: 24,
+    });
+    expect(mapped.payload).not.toHaveProperty('sampler_name');
+    expect(mapped.omitted).toEqual([]);
+    expect(mapped.fieldStatus.sampler_name).toBe('supported');
+    expect(mapped.fieldStatus.scheduler).toBe('supported');
+
+    // Unset sampler_name / scheduler: not fabricated, not present in payload, not in omitted
+    const { sampler_name: _s, scheduler: _sc, ...unfilledBody } = filledBody;
+    const unsetMapped = buildCivitaiVideoInput(unfilledBody, officialVideoSchema);
+    expect(unsetMapped.payload).not.toHaveProperty('sampler');
+    expect(unsetMapped.payload).not.toHaveProperty('sampler_name');
+    expect(unsetMapped.payload).not.toHaveProperty('scheduler');
+    expect(unsetMapped.omitted).toEqual([]);
   });
 
   it('selects an official LTX2 operation schema and uses its fps, image array and LoRA object shape', () => {
@@ -230,7 +308,7 @@ describe('Civitai video request mapping from selected official schema', () => {
     expect(endIdx, 'End boundary of Civitai video workflow dispatch must exist in server.ts').toBeGreaterThan(startIdx);
     const codeSlice = serverSource.slice(startIdx, endIdx);
 
-    const wrapped = `async function __exec(req, videoInput, upstreamFetch, generationContext, sanitizeGenerationMetadata, CIVITAI_VIDEO_SUBMIT_WAIT_SECONDS, CIVITAI_VIDEO_OPENAPI_URL, videoSchemaStatus, videoSchemaCustomFieldsUnvalidated, videoSchemaFields, videoSchemaSelected, videoOverrides, videoSchemaFetch, model, apiKey) {
+    const wrapped = `async function __exec(req, videoInput, upstreamFetch, generationContext, sanitizeGenerationMetadata, CIVITAI_VIDEO_SUBMIT_WAIT_SECONDS, CIVITAI_VIDEO_OPENAPI_URL, videoSchemaStatus, videoSchemaCustomFieldsUnvalidated, videoSchemaFields, videoSchemaSelected, videoOverrides, videoSchemaFetch, model, apiKey, videoOmitted = [], videoFieldStatus = {}) {
       let capturedUrl = "";
       let capturedBody = null;
       const realFetch = upstreamFetch;

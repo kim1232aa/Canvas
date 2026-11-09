@@ -782,6 +782,8 @@ export function extractWorkflowParameters(
     // Filled recipe values (e.g. preset cfg/steps) are sent as filled; the route maps them to the endpoint's declared field.
     steps = numOrUndef(execNode.values.steps);
     cfg = numOrUndef(execNode.values.cfg ?? execNode.values.guidance_scale);
+    sampler = strOrUndef(execNode.values.sampler_name ?? execNode.values.sampler);
+    scheduler = strOrUndef(execNode.values.scheduler);
     seed = (execNode.values.control_after_generate ?? execNode.values.seedControl) === 'randomize'
       ? Math.floor(Math.random() * 1000000000)
       : numOrUndef(execNode.values.seed);
