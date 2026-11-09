@@ -9,10 +9,23 @@
 - 分支 `main`，HEAD `8d53843`（Merge `feat/fixtest146-per-suite-timeout-for-heavy-f`）。
 - `origin/main` 落后本地 **11 个提交**：`git rev-list --left-right --count origin/main...main` → `0	11`。即本轮已合并修复尚未推送。
 - 工作区在写本文时为 clean（`git status --porcelain` 无输出）。
-- Tower 任务账目：150 个任务，**136 merged / 8 abandoned / 6 open**。
-  - **open 且有 worker 死亡**：M140、M147、M148、M149。
+- Tower 任务账目：151 个任务（新增 M151），**136 merged / 8 abandoned / 7 open**。
+  - **open（关机前在飞，均未合并 main）**：M140、M147、M148、M149、M151。
   - **open 且未派发**：M142、M144。
   - **abandoned**：M8、M13、M141 等 8 个，不可重开，需要时按新任务重规划。
+
+### 1.1 关机前在飞状态（2026-11-09 收尾）
+
+| 任务 | 分支 / 提交 | 状态 | 主控核实到的事实 |
+| --- | --- | --- | --- |
+| M140 | `feat/fixschema140…` @ `685d8ef`，返工中 | review R1 = **p2-2items / fix-then-merge** | P2-1：`writeNsfwSeeded` 生产零调用点（`SchemaChoiceControls.tsx:185` 未传 `recordSeeded`），`ui_default` 只在单测成立；P2-2：三处 `isVideo` 尾部为永假死分支、`aimlapiIsImageModel` 正则收窄有误判风险。Tower 决定走**方案 A 补真实接线**，已把 `SchemaChoiceControls.tsx` 纳入 scope 并 resume worker |
+| M148 | `feat/uiwire148…` @ `58cb6ce` | 主控实测：3 files / **38 tests passed**，`tsc` exit 0；`review148-argon` 审查中 | 已删除旧 `isDeclaredSchemaFieldOmitted` 当「不支持」证据的用法，统一三分；风险点：`unsupported` 且无值对所有 widget `return null`，正确性完全依赖 `fieldCapability` 在空 provider / 加载中 / 失败时返回 `unknown` |
+| M149 | `feat/hub149…` @ `6472148` | 主控实测：目标 3 files **exit 0**，`tsc` exit 0；`review149-argon` 审查中 | 架构未知条目已保留 + 徽章；虚构耗时已删。尚存未取证数字：SDXL `25~35 步`、Animagine `28~35 步`、Fal LoRA `0.1~2.0`、以及 `fal-ai/fast-sdxl` 是否真实存在 |
+| M151 | `feat/fixred151…` @ `ffdc48d` | **已打回返工** | 初版把 `SCHEMA_SCOPED_BADGES`（供应商白名单）当作 schema 闭合证据，并把既有断言 `false→true`；已要求改为 `additionalProperties === false` 的**证据驱动**，恢复原断言语义，并补「开放 schema 缺字段 ⇒ unknown」反向测试 |
+| M147 | `feat/uiwire147…` | worker 运行中（>30min，未死亡） | 14 个写死 `grey*/omit*` 开关改 `fieldCapability` |
+| M142 / M144 | — | 已规划未派发 | 方案矩阵声明、死代码与未验证 HF 字段 |
+
+**关机不会丢失工作**：所有在飞改动都在各自 `.tower/worktrees/wt-*` 与分支里；main 停在 `c86adc4`，未合并任何未通过 review 的分支。
 
 ### 2. 本轮已合并的修复（主控逐条核对 diff 后合并）
 
@@ -78,6 +91,14 @@
 
 2、3 指向同一处：`isSchemaOmitCandidate` 在近期「能力判定」改动后，对「schema 明确未声明」的字段不再返回可省略，与既有契约测试冲突。**在修复前，不得对外宣称「全量测试通过」。**
 
+**追加发现：仓库存在既有 flaky 测试（与具体分支无关）**
+
+`src/server/forwardFilledParams.test.ts` 在负载下会随机失败（一个用例 5s 超时、另一个断言收到 2 次发送）。主控实测证据：
+
+- 在 `main@8d53843` 上连跑 2 次：第 1 次 4 passed，第 2 次 **2 failed**；在 M140 分支上同样出现，单跑该文件 2 次均全绿。
+- 根因（读代码确认）：4 个用例共享模块级 `sent` 数组与全局 `fetch` stub，`dispatch()` 在 `res.json()` 时即 resolve，前一个用例的迟到异步请求会推进下一个用例的 `sent`；负载高时前一个用例先超时，请求同样漏到下一个用例。
+- 正确修法不是加 sleep 或放宽断言，而是每用例独立捕获数组、按目标端点断言、并在 `afterEach` 清理全局 stub 并排空异步。**在修复前，「全量测试通过」这一门禁不可复现。**
+
 **其余结论**：本轮没有任何供应商达到 `PASS_GENERATION`；已有 `PASS_BILLING` 仅证明「真实出站 + 上游原文透传」，不代表生成可用。
 
 ### 7. 真实 UI 验收现状（2026-11-09 已有证据）
@@ -101,6 +122,7 @@
 - 查询词 3：`frontend UI parameter matching provider schema dynamic hide unsupported fields 2026` —— `mcp__agy-search__search_web`，返回 schema-driven UI 的过滤与状态剪枝模式。
 - 查询词 4：`fal.ai API loras array path scale parameter image generation reference` —— `mcp__tavily__tavily_search`（advanced），确认 `LoraWeight` = `{path, scale}`、`scale` 默认 1.0、支持 per-layer 字典。
 - 查询词 5：`Civitai LoRA base model architecture mismatch SDXL Flux API reject incompatible` —— `mcp__9router__search`（brave），返回「FLUX LoRA 被 SDXL loader 拒绝属架构不匹配」「ComfyUI issue #11863 shape mismatch」。
+- 查询词 6：`Krea 2 Turbo official 8 steps CFG disabled RAW 52 steps` —— `mcp__9router__search`（brave），返回 Krea 官方仓库 `krea-ai/krea-2`：RAW 用 52 steps + CFG 3.5，Turbo 为 8 steps、CFG disabled。该条用于核对本文「不能把 RAW 参数套到 Turbo」的表述。
 - 失败记录：`mcp__tavily__tavily_search` 一次返回 **HTTP 429**（超出请求频率），已按阶梯切换 9router 成功；`mcp__plugin-kimi-web-tools_web__web_fetch` 三次失败（网关守护 8s 未就绪 / session 校验），改用搜索摘要 + 已有官方页面证据，**未打开原文的部分已在上面逐条标注为来自搜索摘要**。
 
 ### 10. 本轮实测日志
