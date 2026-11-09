@@ -34,7 +34,8 @@ describe('fix16 history card polish', () => {
 
 // fix16 #5, as behavior: while HistoryModal is open an ordinary error toast is not repeated on top of it, but an error
 // the history card cannot show (alwaysVisible, e.g. a failed delete) stays visible. Mounts the real App (React act() env).
-describe('fix16 #5 HistoryModal open suppresses duplicate error toast, not alwaysVisible ones', () => {
+// Under multi-worker load, full-App mount and multiple modal/toast cycles take >5s; per-suite timeout allows reliable completion without raising global timeout.
+describe('fix16 #5 HistoryModal open suppresses duplicate error toast, not alwaysVisible ones', { timeout: 30000 }, () => {
   const ITEMS = [{ id: 'h-1', url: '/media/one.png', imageUrl: '/media/one.png', prompt: '雨夜霓虹街道，赛博朋克风格，广角构图', model: 'm', provider: 'p', timestamp: 1 }];
   const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
   let host: HTMLDivElement; let root: Root;
