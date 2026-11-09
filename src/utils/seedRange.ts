@@ -43,24 +43,3 @@ export function seedRangeAdvisory(provider: string | undefined | null, model: st
   return null;
 }
 
-/**
- * Seed range is strictly advisory (UI hint / random generator bounds only).
- * Never hard-blocks pre-run for any provider or value (including -1); upstream decides verbatim.
- */
-export function seedRangeIssue(_provider: string | undefined | null, _model: string | undefined | null, _seed: unknown, _label?: string): string | null {
-  return null;
-}
-
-type NodeLike = { id?: string; type: string; title?: string; bypassed?: boolean; values?: Record<string, any> };
-type ConnLike = { fromNodeId: string; toNodeId: string; toSocketId?: string };
-
-/**
- * Pre-run seed range gate is disabled (advisory only): never blocks execution.
- * Values (including -1 or out-of-range integers) are sent verbatim for upstream to decide.
- */
-export function seedSchemaIssues(
-  _nodes: NodeLike[],
-  _connections?: ConnLike[],
-): string | null {
-  return null;
-}

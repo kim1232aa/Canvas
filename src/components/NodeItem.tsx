@@ -60,7 +60,7 @@ import { checkpointNodeTitle, ksamplerNodeTitle, loraLoaderNodeTitle, LORA_LOADE
 import { formatVideoNodeTitle, formatCheckpointNodeTitle, formatNodeDisplayTitle } from '../utils/nodeDisplayTitle';
 import { errorBannerText, priorRunErrorLabel, LOCAL_BLOCK_NODE_LINE } from '../utils/apiFailure';
 import { upstreamFailedLine } from '../utils/schemaFailure';
-import { formatRecordTime, getExecutions } from '../services/executionTrace';
+import { formatRecordTime } from '../services/executionTrace';
 import { loraSourceMismatch } from '../utils/loraSourceMismatch';
 import { EmphasizeLimit } from './TextEmphasis';
 import { CustomModelIdField } from './CustomModelIdField';
@@ -498,23 +498,17 @@ export const NodeItem: React.FC<NodeItemProps> = ({
       )}
 
       {/* Node error message banner with progressive disclosure */}
-      {node.errorMessage && node.state !== 'running' && (() => {
-        const executions = typeof getExecutions === 'function' ? getExecutions() : [];
-        const lastErr = executions.filter((r) => r.state === 'error' && r.category !== 'local').pop();
-        const traceResp = (lastErr?.response && typeof lastErr.response === 'object' ? lastErr.response : {}) as any;
-        const statusCode = (node as any).errorStatusCode || traceResp?.upstreamStatus || traceResp?.status || lastErr?.status || undefined;
-        const endpoint = (node as any).errorEndpoint || traceResp?.endpoint || traceResp?.exactEndpointCalled || lastErr?.route || undefined;
-        return (
-          <NodeErrorDisclosure
-            errorMessage={node.errorMessage}
-            provider={currentProvider || node.values?.targetProvider}
-            endpoint={endpoint}
-            statusCode={statusCode}
-            errorAt={node.errorAt}
-            onOpenSettings={onOpenSettings}
-          />
-        );
-      })()}
+      {node.errorMessage && node.state !== 'running' && (
+        <NodeErrorDisclosure
+          errorMessage={node.errorMessage}
+          errorKind={node.errorKind}
+          provider={node.errorProvider || currentProvider || node.values?.targetProvider}
+          endpoint={node.errorEndpoint}
+          statusCode={node.errorStatusCode}
+          errorAt={node.errorAt}
+          onOpenSettings={onOpenSettings}
+        />
+      )}
 
       {/* Sockets Row (Inputs on Left, Outputs on Right) */}
       <div className="px-3 py-2 flex justify-between gap-4">

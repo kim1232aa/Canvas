@@ -321,23 +321,29 @@ describe('BackendSettingsModal key-page links & key status failure reporting', (
     c2.remove();
   });
 
-  it('formatExecutionStatusText rewrites engineer progress strings to human-friendly copy', () => {
-    // Stage 4 initial submit (< 2s)
-    expect(
-      formatExecutionStatusText('[4/5] 正在向 WAVESPEED 官方算力提交任务并等待渲染回传...', 1)
-    ).toBe('正在提交请求至云端服务商...');
+  it('formatExecutionStatusText keeps provider name and stage while formatting human-readable elapsed time and never masks 0x hex strings', () => {
+    // Stage 4 initial submit (< 2s): keeps [4/5] and provider name WAVESPEED + elapsed time
+    const s1 = formatExecutionStatusText('[4/5] 正在向 WAVESPEED 官方算力提交任务并等待渲染回传...', 1);
+    expect(s1).toContain('[4/5]');
+    expect(s1).toContain('WAVESPEED');
+    expect(s1).toContain('已耗时 1秒');
+    expect(s1).toBe('[4/5] 正在向 WAVESPEED 官方算力提交任务并等待渲染回传... (已耗时 1秒)');
 
-    // Stage 4 ongoing request (>= 2s)
-    expect(
-      formatExecutionStatusText('[4/5] WAVESPEED 请求进行中 (已耗时 2s，等待上游确认状态)...', 2)
-    ).toBe('等待上游返回结果 (已耗时 2秒)...');
+    // Stage 4 ongoing request (>= 2s): keeps [4/5] and WAVESPEED
+    const s2 = formatExecutionStatusText('[4/5] WAVESPEED 请求进行中 (已耗时 2s，等待上游确认状态)...', 2);
+    expect(s2).toContain('[4/5]');
+    expect(s2).toContain('WAVESPEED');
+    expect(s2).toBe('[4/5] WAVESPEED 请求进行中 (已耗时 2秒，等待上游确认状态)...');
 
-    // Stage 4 ongoing request at 5s
-    expect(
-      formatExecutionStatusText('[4/5] NOVITA 请求进行中 (已耗时 5s，等待上游确认状态)...', 5)
-    ).toBe('等待上游返回结果 (已耗时 5秒)...');
+    // Stage 4 ongoing request at 5s: keeps [4/5] and NOVITA
+    const s5 = formatExecutionStatusText('[4/5] NOVITA 请求进行中 (已耗时 5s，等待上游确认状态)...', 5);
+    expect(s5).toContain('[4/5]');
+    expect(s5).toContain('NOVITA');
+    expect(s5).toBe('[4/5] NOVITA 请求进行中 (已耗时 5秒，等待上游确认状态)...');
 
-    // Non-progress messages left unchanged
+    // Non-progress messages left unchanged, including 0x+40 hex strings
     expect(formatExecutionStatusText('准备环境...', 0)).toBe('准备环境...');
+    const hexMsg = 'Upstream tx 0x1234567890abcdef1234567890abcdef12345678 reverted';
+    expect(formatExecutionStatusText(hexMsg, 3)).toBe(hexMsg);
   });
 });
