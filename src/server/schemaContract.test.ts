@@ -103,7 +103,7 @@ const submit = async (baseUrl: string, provider: string, body: any) => {
   return r.json() as Promise<any>;
 };
 /** Declared Schema props the UI sees (custom_parameters._canvas.schemaProperties). */
-const hintCustom = (props: string[]) => JSON.stringify({ _canvas: { schemaProperties: props } });
+const hintCustom = (props: string[], schemaClosed = false) => JSON.stringify({ _canvas: { schemaProperties: props, ...(schemaClosed ? { schemaClosed: true } : {}) } });
 /** Canvas field → declared draft param name (only what the draft lists). */
 const CANVAS = { seed: 42, steps: 6, cfg: 3.5, width: 1024, height: 768, negative_prompt: 'blurry' } as const;
 const expectNoOmitBadge = (provider: string, declared: string[], fields: string[]) => {
@@ -171,12 +171,14 @@ describe('provider contract: declared fields must be sent', () => {
     }, () => 'k');
   });
 
+  // 官方证据: https://www.krea.ai/docs/api-reference/image/ideogram-30 (POST /generate/image/ideogram/ideogram-3 官方参数仅含 prompt, width, height, seed, character_reference_images, style_images；不接受 steps, guidance_scale)
   it('undeclared fields may be flagged: Krea ideogram has no steps/guidance_scale', () => {
     const p = draft('krea').image.parametersByEndpoint['ideogram/ideogram-4.5'];
     const declared = Object.keys(p).filter((k) => p[k] !== false && p[k]?.supported !== false);
-    expect(isSchemaOmitCandidate('krea', 'steps', hintCustom(declared))).toBe(true);
-    expect(isSchemaOmitCandidate('krea', 'cfg', hintCustom(declared))).toBe(true);
-    expect(isSchemaOmitCandidate('krea', 'seed', hintCustom(declared))).toBe(false);
+    const closed = hintCustom(declared, true);
+    expect(isSchemaOmitCandidate('krea', 'steps', closed)).toBe(true);
+    expect(isSchemaOmitCandidate('krea', 'cfg', closed)).toBe(true);
+    expect(isSchemaOmitCandidate('krea', 'seed', closed)).toBe(false);
   });
 });
 

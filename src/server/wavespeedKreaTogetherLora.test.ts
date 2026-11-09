@@ -35,10 +35,13 @@ describe('WaveSpeed Krea family: resolution + aspect_ratio, no size', () => {
     expect(f.find((x) => x.key === 'resolution')?.enumValues).toEqual(['1k', '2k']);
     expect(f.find((x) => x.key === 'aspect_ratio')?.enumValues).toContain('16:9');
   });
+  // 官方证据: https://wavespeed.ai/models/wavespeed-ai/krea-v2/turbo-lora (Key inputs: prompt, image, aspect_ratio, resolution, seed, loras; request_schema.additionalProperties === false)
   it('badges: width/height/output_format 该端点不支持 on Krea; aspect_ratio/resolution not', () => {
-    const props = Object.keys(schemaOf('wavespeed-ai/krea-v2/turbo-lora').properties);
-    for (const f of ['width', 'height', 'output_format', 'steps', 'cfg']) expect(isSchemaOmitCandidate('wavespeed', f, '{}', props)).toBe(true);
-    for (const f of ['aspect_ratio', 'resolution', 'seed']) expect(isSchemaOmitCandidate('wavespeed', f, '{}', props)).toBe(false);
+    const reqSchema = schemaOf('wavespeed-ai/krea-v2/turbo-lora');
+    const props = Object.keys(reqSchema.properties);
+    const custom = JSON.stringify({ _canvas: { schemaProperties: props, schemaClosed: reqSchema.additionalProperties === false } });
+    for (const f of ['width', 'height', 'output_format', 'steps', 'cfg']) expect(isSchemaOmitCandidate('wavespeed', f, custom, reqSchema)).toBe(true);
+    for (const f of ['aspect_ratio', 'resolution', 'seed']) expect(isSchemaOmitCandidate('wavespeed', f, custom, reqSchema)).toBe(false);
   });
 });
 

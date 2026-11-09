@@ -339,9 +339,11 @@ export default function App() {
   useEffect(() => subscribeSchemaSelectResult(({ provider, model, result, reused }) => {
     // Persist Schema property names on matching Checkpoint (dropdown + hub) so badges match the run Schema.
     if (result.ok) {
-      const props = result.data?.inputSchema?.properties;
+      const inputSchema = result.data?.inputSchema;
+      const props = inputSchema?.properties;
       if (props && typeof props === 'object') {
         const keys = Object.keys(props);
+        const schemaClosed = inputSchema?.additionalProperties === false;
         setNodes((prev) => prev.map((n) => {
           if (n.type !== 'CheckpointLoaderSimple') return n;
           const ckpt = String(n.values?.ckpt_name || n.values?.model || '');
@@ -349,7 +351,7 @@ export default function App() {
           if (ckpt !== model || prov !== String(provider).toLowerCase()) return n;
           try {
             const prevCp = typeof n.values?.custom_parameters === 'string' ? JSON.parse(n.values.custom_parameters || '{}') : {};
-            const next = JSON.stringify({ ...prevCp, _canvas: { ...prevCp._canvas, scope: { provider, model }, schemaProperties: keys } }, null, 2);
+            const next = JSON.stringify({ ...prevCp, _canvas: { ...prevCp._canvas, scope: { provider, model }, schemaProperties: keys, ...(schemaClosed ? { schemaClosed: true } : {}) } }, null, 2);
             if (next === n.values?.custom_parameters) return n;
             return { ...n, values: { ...n.values, custom_parameters: next } };
           } catch { return n; }
@@ -1974,11 +1976,13 @@ export default function App() {
                   tensorArtInputs: provider === 'tensorart' ? (extraData?.inputs || []) : undefined,
                   // Persist official Schema property names so UI never fakes「不会发送」for declared fields (Krea steps/seed/guidance_scale…)
                   ...(() => {
-                    const props = extraData?.parameters?.properties || extraData?.metadata?.parameters?.properties || extraData?.inputSchema?.properties;
+                    const inputSchema = extraData?.inputSchema || extraData?.metadata?.parameters || extraData?.parameters;
+                    const props = inputSchema?.properties;
                     if (!props || typeof props !== 'object') return {};
+                    const schemaClosed = inputSchema?.additionalProperties === false;
                     try {
                       const prev = typeof n.values?.custom_parameters === 'string' ? JSON.parse(n.values.custom_parameters || '{}') : {};
-                      return { custom_parameters: JSON.stringify({ ...prev, _canvas: { ...prev._canvas, schemaProperties: Object.keys(props) } }, null, 2) };
+                      return { custom_parameters: JSON.stringify({ ...prev, _canvas: { ...prev._canvas, schemaProperties: Object.keys(props), ...(schemaClosed ? { schemaClosed: true } : {}) } }, null, 2) };
                     } catch { return {}; }
                   })(),
                 },

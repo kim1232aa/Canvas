@@ -49,26 +49,29 @@ export function schemaFieldContext(
   const scoped = schemaScopeMatches(customParameters, ctx?.provider, ctx?.model);
   const effectiveCustom = scoped ? customParameters : undefined;
   if (ctx?.schemaEntry !== undefined) return { ...ctx, customParameters: effectiveCustom };
+  let canvas: any;
   try {
-    const canvas = scoped ? JSON.parse(customParameters || '{}')?._canvas : undefined;
+    canvas = scoped ? JSON.parse(customParameters || '{}')?._canvas : undefined;
     if (canvas?.schemaUnavailable) return { customParameters: effectiveCustom, schemaEntry: { status: 'error' } };
     if (canvas?.schemaLoading) return { customParameters: effectiveCustom, schemaEntry: { status: 'loading' } };
   } catch { /* Invalid JSON is reported by the parameter editor. */ }
-  const declared = schemaProperties ?? (scoped ? readDeclaredSchemaProperties(customParameters) : null);
-  const keys = declared && (Symbol.iterator in Object(declared) ? Array.from(declared as Iterable<string>, String) : Object.keys(declared));
-  const isClosed = ctx?.provider ? hasSchemaSendBadges(ctx.provider) : false;
+  const rawSchemaObj = schemaProperties && typeof schemaProperties === 'object' && !Array.isArray(schemaProperties) && !(schemaProperties instanceof Set) ? (schemaProperties as any) : undefined;
+  const isSchemaObject = rawSchemaObj && (rawSchemaObj.type === 'object' || rawSchemaObj.properties || rawSchemaObj.additionalProperties !== undefined);
+  const effectiveProps = isSchemaObject && rawSchemaObj.properties && typeof rawSchemaObj.properties === 'object' ? rawSchemaObj.properties : (schemaProperties ?? (scoped ? readDeclaredSchemaProperties(customParameters) : null));
+  const keys = effectiveProps && (Symbol.iterator in Object(effectiveProps) ? Array.from(effectiveProps as Iterable<string>, String) : Object.keys(effectiveProps));
+  const isClosed = canvas?.schemaClosed === true || (isSchemaObject && rawSchemaObj.additionalProperties === false);
   return {
     customParameters: effectiveCustom,
     ...(keys?.length
       ? {
           schemaEntry: {
             status: 'ready',
-            propertiesObj: Object.fromEntries(keys.map((key) => [key, {}])),
+            propertiesObj: Object.fromEntries(keys.map((key: string) => [key, {}])),
             ...(isClosed
               ? {
                   inputSchema: {
                     type: 'object',
-                    properties: Object.fromEntries(keys.map((key) => [key, {}])),
+                    properties: Object.fromEntries(keys.map((key: string) => [key, {}])),
                     additionalProperties: false,
                   },
                 }
