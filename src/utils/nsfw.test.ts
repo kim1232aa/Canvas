@@ -19,6 +19,17 @@ describe('Official NSFW & Safety field facts', () => {
       docUrl: 'https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/flux-lora',
     });
 
+    expect(OFFICIAL_NSFW_FIELD_POLICIES.enable_output_safety_checker).toMatchObject({
+      field: 'enable_output_safety_checker',
+      type: 'boolean',
+      permissiveValue: false,
+      upstreamDefault: false,
+      restrictedValue: true,
+      permissiveLabel: 'false',
+      restrictedLabel: 'true',
+      docUrl: 'https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/wan/v2.2-a14b/image-to-video/lora',
+    });
+
     expect(OFFICIAL_NSFW_FIELD_POLICIES.disable_safety_checker).toMatchObject({
       field: 'disable_safety_checker',
       type: 'boolean',
@@ -116,6 +127,16 @@ describe('Official NSFW & Safety field facts', () => {
         safety_tolerance: '5',
       });
 
+      const falVideoProps = {
+        prompt: { type: 'string' },
+        enable_safety_checker: { type: 'boolean', default: false },
+        enable_output_safety_checker: { type: 'boolean', default: false },
+      };
+      expect(extractDeclaredNsfwDefaults(falVideoProps)).toEqual({
+        enable_safety_checker: false,
+        enable_output_safety_checker: false,
+      });
+
       const unrelatedProps = {
         prompt: { type: 'string' },
         seed: { type: 'integer' },
@@ -142,14 +163,45 @@ describe('Official NSFW & Safety field facts', () => {
     });
 
     it('returns the user value unchanged when they chose the open value', () => {
-      const schemaProps = { enable_safety_checker: { type: 'boolean' } };
-      const userSet = JSON.stringify({ enable_safety_checker: false });
+      const schemaProps = {
+        enable_safety_checker: { type: 'boolean' },
+        enable_output_safety_checker: { type: 'boolean' },
+      };
+      const userSet = JSON.stringify({ enable_safety_checker: false, enable_output_safety_checker: false });
       expect(applyNsfwDefaultsToCustomParameters(userSet, schemaProps)).toBe(userSet);
     });
 
-    it('seeds permissive defaults into an empty custom_parameters when schema declares a switch', () => {
+    it('seeds enable_output_safety_checker=false when declared in schema, and never injects it when not declared', () => {
+      expect(
+        JSON.parse(
+          applyNsfwDefaultsToCustomParameters(
+            JSON.stringify({ steps: 27 }),
+            { prompt: { type: 'string' }, enable_output_safety_checker: { type: 'boolean', default: false } }
+          )
+        )
+      ).toEqual({
+        steps: 27,
+        enable_output_safety_checker: false,
+      });
+      expect(
+        JSON.parse(
+          applyNsfwDefaultsToCustomParameters(
+            JSON.stringify({ steps: 27 }),
+            { prompt: { type: 'string' } }
+          )
+        )
+      ).toEqual({
+        steps: 27,
+      });
+    });
+
+    it('seeds permissive defaults into an empty custom_parameters when schema declares a switch, and records _canvas.nsfwSeeded when requested', () => {
       expect(JSON.parse(applyNsfwDefaultsToCustomParameters(undefined, { safe_mode: { type: 'boolean' } }))).toEqual({
         safe_mode: false,
+      });
+      expect(JSON.parse(applyNsfwDefaultsToCustomParameters(undefined, { safe_mode: { type: 'boolean' } }, { recordSeeded: true }))).toEqual({
+        safe_mode: false,
+        _canvas: { nsfwSeeded: ['safe_mode'] },
       });
       expect(applyNsfwDefaultsToCustomParameters(undefined, { prompt: { type: 'string' } })).toBe('{}');
     });

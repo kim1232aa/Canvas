@@ -69,6 +69,7 @@ describe('NSFW permissive defaults (AGENTS.md #6): UI seeds visible defaults, ba
     });
     const falApplied = applyNsfwDefaultsToPayload(fal, {
       enable_safety_checker: { type: 'boolean', default: true },
+      enable_output_safety_checker: { type: 'boolean', default: false },
       safety_tolerance: { type: 'string', default: '2' },
     });
 
@@ -112,12 +113,28 @@ describe('NSFW permissive defaults (AGENTS.md #6): UI seeds visible defaults, ba
     });
   });
 
+  it('shows the declared output safety switch as a visible false default and never invents its control', () => {
+    const render = (properties: Record<string, any>) => renderToStaticMarkup(
+      React.createElement(SchemaChoiceControls, { inputSchema: { properties }, value: '{}', onChange: () => {} })
+    );
+    const html = render({ enable_output_safety_checker: { type: 'boolean', default: true } });
+    expect(html).toContain('aria-label="enable_output_safety_checker"');
+    expect(html).toContain('会发送 false');
+    expect(html).toContain('<option value="false" selected="">false</option>');
+    expect(render({ prompt: { type: 'string' } })).not.toContain('enable_output_safety_checker');
+    expect(applyNsfwDefaultsToPayload({ enable_output_safety_checker: false }, { prompt: {} })).toEqual([]);
+    const payload = { enable_output_safety_checker: false };
+    expect(applyNsfwDefaultsToPayload(payload, { enable_output_safety_checker: { type: 'boolean' } })).toMatchObject([{ field: 'enable_output_safety_checker', value: false }]);
+    expect(payload).toEqual({ enable_output_safety_checker: false });
+  });
+
   it('SchemaChoiceControls and CivitaiAllowMatureControl publicly pre-fill permissive defaults when unset', () => {
     const html = renderToStaticMarkup(
       React.createElement(SchemaChoiceControls, {
         inputSchema: {
           properties: {
             enable_safety_checker: { type: 'boolean', default: true },
+            enable_output_safety_checker: { type: 'boolean', default: false },
             safety_tolerance: { type: 'string', enum: ['1', '2', '3', '4', '5'], default: '2' },
           },
         },
@@ -125,6 +142,7 @@ describe('NSFW permissive defaults (AGENTS.md #6): UI seeds visible defaults, ba
         onChange: () => {},
       })
     );
+    expect(html).toContain('enable_output_safety_checker');
     expect(html).toContain('会发送 false');
     expect(html).toContain('会发送 5');
     expect(html).toContain('（不发送）');

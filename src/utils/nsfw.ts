@@ -44,6 +44,17 @@ export const OFFICIAL_NSFW_FIELD_POLICIES: Record<string, NsfwFieldPolicy> = {
     docUrl: 'https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/flux-lora',
     description: 'Fal.ai live schema (flux-lora, flux-2-flex, 2026-11-07): boolean, default true. false disables the checker and requires account authorization; unauthorized requests are always checked.',
   },
+  enable_output_safety_checker: {
+    field: 'enable_output_safety_checker',
+    type: 'boolean',
+    permissiveValue: false,
+    upstreamDefault: false,
+    restrictedValue: true,
+    permissiveLabel: 'false',
+    restrictedLabel: 'true',
+    docUrl: 'https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/wan/v2.2-a14b/image-to-video/lora',
+    description: 'Fal.ai Wan 2.2 video live schema (fal-ai/wan/v2.2-a14b/image-to-video/lora, fal-ai/wan/v2.2-5b/text-to-video, 2026-11-09): boolean, default false. "If set to true, output video will be checked for safety after generation."',
+  },
   disable_safety_checker: {
     field: 'disable_safety_checker',
     type: 'boolean',
@@ -192,14 +203,37 @@ export function writeNsfwOmitted(body: Record<string, any>, omitted: Set<string>
 }
 
 /**
+ * Safety fields automatically pre-filled with their open default by the UI (`SchemaChoiceControls` /
+ * `applyNsfwDefaultsToCustomParameters` when `recordSeeded: true` is passed).
+ * Stored under `_canvas.nsfwSeeded` so the backend mapping audit can distinguish `source: 'ui_default'`
+ * from `source: 'user'` (explicit user choice in `custom_parameters`). Stripped with `_canvas` before sending.
+ */
+export function readNsfwSeeded(body: Record<string, any> | null | undefined): Set<string> {
+  const list = isPlainObject(body?._canvas) ? body._canvas.nsfwSeeded : undefined;
+  return new Set(Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string') : []);
+}
+
+/** Writes the UI-seeded set into `body._canvas.nsfwSeeded`, keeping every other `_canvas` field untouched. */
+export function writeNsfwSeeded(body: Record<string, any>, seeded: Set<string>): void {
+  const canvas = isPlainObject(body._canvas) ? { ...body._canvas } : {};
+  if (seeded.size === 0 && canvas.nsfwSeeded === undefined) return;
+  if (seeded.size > 0) canvas.nsfwSeeded = [...seeded].sort();
+  else delete canvas.nsfwSeeded;
+  if (Object.keys(canvas).length > 0) body._canvas = canvas;
+  else delete body._canvas;
+}
+
+/**
  * Seeds permissive defaults into visible custom_parameters JSON for any official
  * safety switch declared by the live schema that the user has not explicitly set.
  * User-specified keys (including restrictive values) are never overwritten, and
  * fields recorded in `_canvas.nsfwOmitted` (explicit 不发送) are not seeded again.
+ * When `options.recordSeeded` is true, records newly seeded field names in `_canvas.nsfwSeeded`.
  */
 export function applyNsfwDefaultsToCustomParameters(
   customParamsStr: string | undefined,
-  schemaProps: Record<string, any> | undefined
+  schemaProps: Record<string, any> | undefined,
+  options?: { recordSeeded?: boolean }
 ): string {
   let body: Record<string, any> = {};
   try {
@@ -215,12 +249,17 @@ export function applyNsfwDefaultsToCustomParameters(
 
   const nsfwDefaults = extractDeclaredNsfwDefaults(schemaProps);
   const explicitlyOmitted = readNsfwOmitted(body);
+  const seeded = readNsfwSeeded(body);
   let changed = false;
   for (const [key, permissiveValue] of Object.entries(nsfwDefaults)) {
     if (body[key] === undefined && !explicitlyOmitted.has(key)) {
       body[key] = permissiveValue;
+      if (options?.recordSeeded) seeded.add(key);
       changed = true;
     }
+  }
+  if (options?.recordSeeded && changed) {
+    writeNsfwSeeded(body, seeded);
   }
 
   return changed ? JSON.stringify(body, null, 2) : (customParamsStr ?? '{}');

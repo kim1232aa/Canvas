@@ -5,6 +5,8 @@ import {
   getNsfwPermissiveDefault,
   extractDeclaredNsfwDefaults,
   applyNsfwDefaultsToCustomParameters,
+  readNsfwSeeded,
+  writeNsfwSeeded,
   type NsfwFieldPolicy,
 } from '../utils/nsfw';
 
@@ -15,6 +17,8 @@ export {
   getNsfwPermissiveDefault,
   extractDeclaredNsfwDefaults,
   applyNsfwDefaultsToCustomParameters,
+  readNsfwSeeded,
+  writeNsfwSeeded,
   type NsfwFieldPolicy,
 };
 
