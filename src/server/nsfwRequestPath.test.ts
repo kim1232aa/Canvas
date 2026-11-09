@@ -138,7 +138,7 @@ describe('Civitai image workflow body', () => {
 });
 
 describe('Civitai video workflow body', () => {
-  const fn = compile(`async function __exec(req, videoInput, upstreamFetch, generationContext, sanitizeGenerationMetadata, CIVITAI_VIDEO_SUBMIT_WAIT_SECONDS, CIVITAI_VIDEO_OPENAPI_URL, videoSchemaStatus, videoSchemaCustomFieldsUnvalidated, videoSchemaFields, videoSchemaSelected, videoOverrides, videoSchemaFetch, model, apiKey) {
+  const fn = compile(`async function __exec(req, videoInput, upstreamFetch, generationContext, sanitizeGenerationMetadata, CIVITAI_VIDEO_SUBMIT_WAIT_SECONDS, CIVITAI_VIDEO_OPENAPI_URL, videoSchemaStatus, videoSchemaCustomFieldsUnvalidated, videoSchemaFields, videoSchemaSelected, videoOverrides, videoSchemaFetch, model, apiKey, videoOmitted = [], videoFieldStatus = {}) {
     let capturedBody = null;
     upstreamFetch = async (_m, _u, init) => {
       capturedBody = JSON.parse(init.body);
