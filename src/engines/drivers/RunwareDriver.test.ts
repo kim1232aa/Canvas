@@ -143,7 +143,32 @@ describe('RunwareDriver', () => {
 
     await expect(
       driver.generate({ prompt: 'test', model: 'runware:100@1' }, { runwareKey: FIXTURE_KEY }),
-    ).rejects.toThrow('Runware 路由 HTTP 502: gateway exploded');
+    ).rejects.toMatchObject({
+      message: 'HTTP 502: gateway exploded',
+      status: 502,
+      responseBody: 'gateway exploded',
+    });
+  });
+
+  it('does not stringify object error field to [object Object] and attaches numeric status and verbatim responseBody', async () => {
+    const rawBody = JSON.stringify({ error: { code: 'payment_required', message: 'x' } });
+    mockFetch.mockResolvedValueOnce(
+      new Response(rawBody, { status: 402, headers: { 'Content-Type': 'application/json' } })
+    );
+
+    const err = await driver
+      .generate({ prompt: 'a red fox in snow', model: 'runware:100@1' }, { runwareKey: FIXTURE_KEY })
+      .catch((e) => e);
+
+    expect({
+      message: err?.message,
+      status: err?.status,
+      responseBody: err?.responseBody,
+    }).toEqual({
+      message: 'HTTP 402: {"code":"payment_required","message":"x"}',
+      status: 402,
+      responseBody: rawBody,
+    });
   });
 
   it('throws when a successful response has neither mediaUrl nor imageUrl', async () => {

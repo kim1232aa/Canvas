@@ -212,6 +212,36 @@ describe('TensorArt model driver', () => {
     expect(body.model).toBe('672797109289765558');
   });
 
+  it('does not stringify object error field to [object Object] on isVideo failure and attaches status and responseBody', async () => {
+    const driver = new TensorArtDriver();
+    const rawBody = JSON.stringify({ error: { code: 'payment_required', message: 'x' } });
+
+    vi.mocked(tracedFetch).mockResolvedValueOnce(
+      new Response(rawBody, { status: 402, headers: { 'Content-Type': 'application/json' } })
+    );
+
+    const err = await driver
+      .generate(
+        {
+          model: '672797109289765558',
+          prompt: 'video prompt',
+          isVideo: true,
+        } as any,
+        { tensorartKey: 'token' }
+      )
+      .catch((e) => e);
+
+    expect({
+      message: err?.message,
+      status: err?.status,
+      responseBody: err?.responseBody,
+    }).toEqual({
+      message: 'HTTP 402: {"code":"payment_required","message":"x"}',
+      status: 402,
+      responseBody: rawBody,
+    });
+  });
+
   it('forwards videoFps/videoFrames as fps/totalFrames and extraParams clip_skip/imageResourceId/generationMode to request body', async () => {
     const driver = new TensorArtDriver();
 

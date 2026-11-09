@@ -54,7 +54,11 @@ export function httpErrorMessageFromBody(body: ReadResponseBody, fields: string[
 /** Builds the Error for a failed response (reads the body once). */
 export async function httpErrorFromResponse(resp: Response, fields?: string[]): Promise<Error> {
   const body = await readResponseBody(resp);
-  return Object.assign(new Error(httpErrorMessageFromBody(body, fields)), { status: body.status, responseBody: body.text });
+  return Object.assign(new Error(httpErrorMessageFromBody(body, fields)), {
+    status: body.status,
+    responseBody: body.text,
+    ...(body.json !== undefined ? { data: body.json } : {}),
+  });
 }
 
 /**

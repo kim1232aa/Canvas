@@ -50,8 +50,7 @@ export class SenseNovaDriver extends BaseEngineDriver {
     };
     const resp=await fetch('/api/engine/sensenova/generate',{method:'POST',headers,body:JSON.stringify(body)});
     if (!resp.ok) {
-      const raw=await resp.text();
-      throw new Error(`SenseNova 图像路由 HTTP ${resp.status}: ${raw}`);
+      throw await httpErrorFromResponse(resp);
     }
     const data=await resp.json();
     if (!data.mediaUrl && !data.imageUrl) throw new Error('SenseNova 图像接口成功响应缺少图像，不记成功');

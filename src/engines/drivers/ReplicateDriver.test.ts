@@ -197,6 +197,46 @@ describe('ReplicateDriver', () => {
     mockFetch.mockResolvedValueOnce(jsonResponse({ error: err, blocked: 'schema_missing', notSent: true }, 404));
     await expect(driver.generate({ prompt: 'x', model: 'a/b' } as any, { replicateKey: FIXTURE_KEY })).rejects.toThrow(err);
   });
+
+  it('does not stringify object error field to [object Object] and attaches numeric status and verbatim responseBody', async () => {
+    const rawBody = JSON.stringify({ error: { code: 'payment_required', message: 'x' } });
+    mockFetch.mockResolvedValueOnce(
+      new Response(rawBody, { status: 402, headers: { 'Content-Type': 'application/json' } })
+    );
+
+    const err = await driver
+      .generate({ prompt: 'a cinematic wolf in neon rain', model: 'black-forest-labs/flux-schnell' }, { replicateKey: FIXTURE_KEY })
+      .catch((e) => e);
+
+    expect({
+      message: err?.message,
+      status: err?.status,
+      responseBody: err?.responseBody,
+    }).toEqual({
+      message: 'HTTP 402: {"code":"payment_required","message":"x"}',
+      status: 402,
+      responseBody: rawBody,
+    });
+  });
+
+  it('preserves error status and raw response data on failure (restored M4 regression)', async () => {
+    const rawBody = JSON.stringify({
+      error: 'Replicate Insufficient credit',
+      details: 'You have insufficient credit to run this model',
+      upstreamStatus: 402,
+    });
+    mockFetch.mockResolvedValueOnce(
+      new Response(rawBody, { status: 402, headers: { 'Content-Type': 'application/json' } })
+    );
+
+    await expect(
+      driver.generate({ model: 'black-forest-labs/flux-schnell', prompt: 'test prompt' }, {})
+    ).rejects.toMatchObject({
+      status: 402,
+      responseBody: rawBody,
+      data: expect.objectContaining({ upstreamStatus: 402 }),
+    });
+  });
 });
 
 describe('ReplicateDriver batchSize', () => {
