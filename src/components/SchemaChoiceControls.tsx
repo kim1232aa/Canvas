@@ -2,7 +2,7 @@ import { UrlText } from './UrlText';
 import React from 'react';
 import { CANVAS_TO_SCHEMA_ALIASES } from '../utils/schemaSendHint';
 import { formatSchemaFieldLabel } from '../utils/nodeUiLabels';
-import { applyNsfwDefaultsToCustomParameters, findNsfwPolicy, readNsfwOmitted, writeNsfwOmitted, type NsfwFieldPolicy } from '../utils/nsfw';
+import { applyNsfwDefaultsToCustomParameters, findNsfwPolicy, readNsfwOmitted, readNsfwSeeded, writeNsfwOmitted, writeNsfwSeeded, type NsfwFieldPolicy } from '../utils/nsfw';
 
 /**
  * Generic node controls for official-Schema fields that no canvas widget maps to
@@ -182,7 +182,7 @@ function SchemaNsfwSeedEffect({
   React.useEffect(() => {
     if (!nsfwKeySig || seededSchemaRef.current === nsfwKeySig) return;
     seededSchemaRef.current = nsfwKeySig;
-    const next = applyNsfwDefaultsToCustomParameters(value, inputSchema?.properties);
+    const next = applyNsfwDefaultsToCustomParameters(value, inputSchema?.properties, { recordSeeded: true });
     if (next !== (value ?? '{}')) {
       onChange(next);
     }
@@ -335,12 +335,18 @@ export function SchemaChoiceControls({
     else omitted.delete(key);
     writeNsfwOmitted(b, omitted);
 
+    const seeded = readNsfwSeeded(b);
+    // User explicitly modified or cleared this field -> remove from UI-seeded set
+    seeded.delete(key);
+
     // Seed other unset NSFW fields that aren't explicitly omitted
     for (const f of fields) {
       if (f.isNsfw && f.nsfwPolicy && b[f.key] === undefined && !omitted.has(f.key) && f.key !== key) {
         b[f.key] = f.nsfwPolicy.permissiveValue;
+        seeded.add(f.key);
       }
     }
+    writeNsfwSeeded(b, seeded);
 
     if (next === undefined) {
       delete b[key];

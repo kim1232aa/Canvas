@@ -385,15 +385,59 @@ describe('safety-switch choices on the wire (registered submit route)', () => {
         note: expect.stringMatching(/前端按官方 Schema 公开预填默认放开值.*未由后端隐式注入/),
       });
     });
+
+    // Real request with _canvas.nsfwSeeded covering both fields -> both get source: 'ui_default'
+    await submit({ disable_safety_checker: true, enable_safety_checker: false, _canvas: { nsfwSeeded: ['disable_safety_checker', 'enable_safety_checker'] } }, (sent, data) => {
+      noMeta(sent, data);
+      expect(sent.disable_safety_checker).toBe(true);
+      expect(sent.enable_safety_checker).toBe(false);
+      expect(data.actualRequest.mapping.find((m: any) => m.from === 'custom_parameters.disable_safety_checker')).toMatchObject({
+        source: 'ui_default',
+      });
+      expect(data.actualRequest.mapping.find((m: any) => m.from === 'custom_parameters.enable_safety_checker')).toMatchObject({
+        source: 'ui_default',
+      });
+      expect(data.actualRequest.mapping.find((m: any) => m.from === 'nsfw_policy.disable_safety_checker')).toMatchObject({
+        source: 'ui_default',
+        note: expect.stringMatching(/前端按官方 Schema 公开预填默认放开值.*未由后端隐式注入/),
+      });
+      expect(data.actualRequest.mapping.find((m: any) => m.from === 'nsfw_policy.enable_safety_checker')).toMatchObject({
+        source: 'ui_default',
+        note: expect.stringMatching(/前端按官方 Schema 公开预填默认放开值.*未由后端隐式注入/),
+      });
+    });
+
+    // Request with no _canvas at all -> both get source: 'user'
+    await submit({ disable_safety_checker: true, enable_safety_checker: false }, (sent, data) => {
+      noMeta(sent, data);
+      expect(sent.disable_safety_checker).toBe(true);
+      expect(sent.enable_safety_checker).toBe(false);
+      expect(data.actualRequest.mapping.find((m: any) => m.from === 'custom_parameters.disable_safety_checker')).toMatchObject({
+        source: 'user',
+      });
+      expect(data.actualRequest.mapping.find((m: any) => m.from === 'custom_parameters.enable_safety_checker')).toMatchObject({
+        source: 'user',
+      });
+      expect(data.actualRequest.mapping.find((m: any) => m.from === 'nsfw_policy.disable_safety_checker')).toMatchObject({
+        source: 'user',
+        note: expect.stringMatching(/用户 custom_parameters.*未由后端注入/),
+      });
+      expect(data.actualRequest.mapping.find((m: any) => m.from === 'nsfw_policy.enable_safety_checker')).toMatchObject({
+        source: 'user',
+        note: expect.stringMatching(/用户 custom_parameters.*未由后端注入/),
+      });
+    });
   });
 });
 
 describe('catalog-silent video routing', () => {
-  it('aimlapiCatalogRows classifies image-to-video and video-to-video as video (/video/generations), never image', () => {
+  it('aimlapiCatalogRows classifies image-to-video and video-to-video as video (/video/generations), and matches image types generically', () => {
     const rows = aimlapiCatalogRows([
       { id: 'klingai/v2-master-image-to-video', type: 'image-to-video', info: { name: 'Kling I2V' } },
       { id: 'wan/v2.2-video-to-video', type: 'video-to-video', info: { name: 'Wan V2V' } },
       { id: 'alibaba/z-image-turbo-lora', type: 'image', info: { name: 'Z Image' } },
+      { id: 'stability/sdxl-turbo', type: 'sdxl/image', info: { name: 'SDXL Turbo' } },
+      { id: 'custom/special-image-model', type: 'custom/image', info: { name: 'Custom Image' } },
     ]);
     expect(rows.find((r) => r.id === 'klingai/v2-master-image-to-video')).toMatchObject({
       type: 'video',
@@ -406,6 +450,16 @@ describe('catalog-silent video routing', () => {
       endpoint: '/video/generations',
     });
     expect(rows.find((r) => r.id === 'alibaba/z-image-turbo-lora')).toMatchObject({
+      type: 'image',
+      category: 'text-to-image',
+      endpoint: '/images/generations',
+    });
+    expect(rows.find((r) => r.id === 'stability/sdxl-turbo')).toMatchObject({
+      type: 'image',
+      category: 'text-to-image',
+      endpoint: '/images/generations',
+    });
+    expect(rows.find((r) => r.id === 'custom/special-image-model')).toMatchObject({
       type: 'image',
       category: 'text-to-image',
       endpoint: '/images/generations',

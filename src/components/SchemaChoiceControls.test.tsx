@@ -108,7 +108,10 @@ describe('SchemaChoiceControls safety fields', () => {
       );
     });
 
-    expect(handleChange).toHaveBeenCalledWith(JSON.stringify({ disable_safety_checker: true }, null, 2));
+    expect(JSON.parse(handleChange.mock.calls[0][0])).toEqual({
+      disable_safety_checker: true,
+      _canvas: { nsfwSeeded: ['disable_safety_checker'] },
+    });
     expect(container.textContent).toContain('会发送 true');
     const select = container.querySelector('select[aria-label="disable_safety_checker"]') as HTMLSelectElement;
     expect(select?.value).toBe('true');
@@ -162,7 +165,10 @@ describe('SchemaChoiceControls safety fields', () => {
         />
       );
     });
-    expect(handleChange).toHaveBeenCalledWith(JSON.stringify({ disable_safety_checker: true }, null, 2));
+    expect(JSON.parse(handleChange.mock.calls[0][0])).toEqual({
+      disable_safety_checker: true,
+      _canvas: { nsfwSeeded: ['disable_safety_checker'] },
+    });
     currentValue = handleChange.mock.calls[0][0];
     handleChange.mockClear();
 
@@ -357,6 +363,81 @@ describe('SchemaChoiceControls safety fields', () => {
     const final = JSON.parse(handleChange.mock.calls[0][0]);
     expect(final).toEqual({ random_toggle: true, _canvas: { nsfwOmitted: ['disable_safety_checker'] } });
     expect(final).not.toHaveProperty('disable_safety_checker');
+
+    await act(async () => { root.unmount(); });
+    container.remove();
+  });
+
+  it('seeds permissive default into _canvas.nsfwSeeded on mount, and removes the field when user manually changes or clears it', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    let currentValue = '{}';
+    const handleChange = vi.fn((v: string) => { currentValue = v; });
+
+    // 1. Initial mount seeds enable_safety_checker=false with _canvas.nsfwSeeded
+    await act(async () => {
+      root.render(
+        <SchemaChoiceControls
+          inputSchema={{ properties: { enable_safety_checker: { type: 'boolean', default: true } } }}
+          value={currentValue}
+          onChange={handleChange}
+        />
+      );
+    });
+    expect(handleChange).toHaveBeenCalled();
+    currentValue = handleChange.mock.calls[0][0];
+    const parsed1 = JSON.parse(currentValue);
+    expect(parsed1.enable_safety_checker).toBe(false);
+    expect(parsed1._canvas?.nsfwSeeded).toEqual(['enable_safety_checker']);
+    handleChange.mockClear();
+
+    // Re-render with seeded value
+    await act(async () => {
+      root.render(
+        <SchemaChoiceControls
+          inputSchema={{ properties: { enable_safety_checker: { type: 'boolean', default: true } } }}
+          value={currentValue}
+          onChange={handleChange}
+        />
+      );
+    });
+
+    // 2. User manually changes value to true -> removed from nsfwSeeded
+    const select = container.querySelector('select[aria-label="enable_safety_checker"]') as HTMLSelectElement;
+    await act(async () => {
+      select.value = 'true';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(handleChange).toHaveBeenCalled();
+    const changedVal = JSON.parse(handleChange.mock.calls[0][0]);
+    expect(changedVal.enable_safety_checker).toBe(true);
+    expect(changedVal._canvas?.nsfwSeeded).toBeUndefined();
+    currentValue = handleChange.mock.calls[0][0];
+    handleChange.mockClear();
+
+    // Re-render with user's value
+    await act(async () => {
+      root.render(
+        <SchemaChoiceControls
+          inputSchema={{ properties: { enable_safety_checker: { type: 'boolean', default: true } } }}
+          value={currentValue}
+          onChange={handleChange}
+        />
+      );
+    });
+
+    // 3. User clears it to '' (不发送) -> also removed from nsfwSeeded and added to nsfwOmitted
+    const selectAfter = container.querySelector('select[aria-label="enable_safety_checker"]') as HTMLSelectElement;
+    await act(async () => {
+      selectAfter.value = '';
+      selectAfter.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(handleChange).toHaveBeenCalled();
+    const clearedVal = JSON.parse(handleChange.mock.calls[0][0]);
+    expect(clearedVal.enable_safety_checker).toBeUndefined();
+    expect(clearedVal._canvas?.nsfwSeeded).toBeUndefined();
+    expect(clearedVal._canvas?.nsfwOmitted).toEqual(['enable_safety_checker']);
 
     await act(async () => { root.unmount(); });
     container.remove();

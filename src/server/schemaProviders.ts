@@ -465,7 +465,7 @@ function aimlapiIsVideoModel(m:any):boolean {
 function aimlapiIsImageModel(m:any):boolean {
   if(aimlapiIsVideoModel(m))return false;
   const out=m?.modalities?.output;const type=String(m?.type||'');const tags=Array.isArray(m?.tags)?m.tags:[];
-  return (Array.isArray(out)&&out.includes('image')) || /^(?:image|text-to-image|image-to-image|image-edit|openai\/image-generations|flux\/image)(?:$|\/)/i.test(type) || /image-generations|image-edit|text-to-image|image-to-image/i.test(type) || tags.includes('playground:image');
+  return (Array.isArray(out)&&out.includes('image')) || /image/i.test(type) || tags.includes('playground:image');
 }
 /** Normalize GET /v1/models → canvas rows (image + video). Dedupes by id preferring image-generations. */
 export function aimlapiCatalogRows(models:any[]) {
@@ -1608,8 +1608,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
     if(provider==='together') {
       const {rows,sourceUrl}=await listForSchema(req,provider,credential);
       const entry:any=rows.find((x:any)=>x.id===model) ?? {id:model,notInCatalog:true}; // not in catalog: send the user's model id; upstream decides
-      const catalogSilent=rows.length===0 && Boolean(catalogFailures.get(req));
-      const isVideo=requestVideoIntent(req) || entry.type==='video' || entry.category==='text-to-video' || ((catalogSilent || entry.notInCatalog===true) && requestVideoIntent(req));
+      const isVideo=requestVideoIntent(req) || entry.type==='video' || entry.category==='text-to-video';
       const endpoint=isVideo?(schemaProviders.together as any).videoRoot+'/videos':schemaProviders.together.root+'/images/generations';
       const specUrl=officialOpenApiSources.together;const opPath=isVideo?'/videos':'/images/generations';
       const inputSchema=openApiPathRequestSchema(await readOfficialSpec(req,provider,'Together',model,specUrl),opPath);
@@ -1618,8 +1617,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
     if(provider==='aimlapi') {
       const {rows,sourceUrl}=await listForSchema(req,provider,credential);
       const entry:any=rows.find((x:any)=>x.id===model) ?? {id:model,notInCatalog:true}; // not in catalog: send the user's model id; upstream decides
-      const catalogSilent=rows.length===0 && Boolean(catalogFailures.get(req));
-      const isVideo=requestVideoIntent(req) || entry.type==='video' || entry.category==='text-to-video' || ((catalogSilent || entry.notInCatalog===true) && requestVideoIntent(req));
+      const isVideo=requestVideoIntent(req) || entry.type==='video' || entry.category==='text-to-video';
       const endpoint=isVideo?(schemaProviders.aimlapi as any).videoRoot+'/video/generations':schemaProviders.aimlapi.root+'/images/generations';
       // Official per-model OpenAPI only: catalog info.docsJson (api.aimlapi.com/docs-json?model=…).
       // Iron rule 3: no static snapshot fallback — missing/failed docs-json → local 400 (没有发出去) with URL + upstream status/body verbatim.
@@ -1657,8 +1655,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
     if(provider==='venice') {
       const {rows,sourceUrl}=await listForSchema(req,provider,credential);
       const entry:any=rows.find((x:any)=>x.id===model) ?? {id:model,notInCatalog:true}; // not in catalog: send the user's model id; upstream decides
-      const catalogSilent=rows.length===0 && Boolean(catalogFailures.get(req));
-      const isVideo=requestVideoIntent(req) || entry.type==='video' || /video/i.test(entry.category||'') || ((catalogSilent || entry.notInCatalog===true) && requestVideoIntent(req));
+      const isVideo=requestVideoIntent(req) || entry.type==='video' || /video/i.test(entry.category||'');
       const endpoint=schemaProviders.venice.root+(isVideo?'/video/queue':'/image/generate');
       const specUrl=officialOpenApiSources.venice;const opPath=isVideo?'/video/queue':'/image/generate';
       const base=openApiPathRequestSchema(await readOfficialSpec(req,provider,'Venice',model,specUrl),opPath);
