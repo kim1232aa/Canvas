@@ -5,6 +5,13 @@ import { schemaSendStatus } from '../utils/schemaSendStatus';
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
+it('retains the real input schema closure and composition rather than only property names', async () => {
+  const inputSchema = { properties: { prompt: {} }, additionalProperties: false, allOf: [{ $ref: '#/Input' }] };
+  ensureModelSchema('wavespeed', 'closure-evidence', (async () => new Response(JSON.stringify({ inputSchema }), { status: 200 })) as typeof fetch);
+  await flush(); await flush();
+  expect(getModelSchemaEntry('wavespeed', 'closure-evidence')?.inputSchema).toEqual(inputSchema);
+});
+
 describe('modelSchemaCache → badges (generic, Krea + AIMLAPI)', () => {
   it('Krea flux-1-dev: steps/guidance_scale/seed declared → 会发送', async () => {
     const f = vi.fn(async () => new Response(JSON.stringify({ inputSchema: { properties: { prompt: {}, steps: {}, guidance_scale: {}, seed: {}, width: {}, height: {} } } }), { status: 200 }));

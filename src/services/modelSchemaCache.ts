@@ -4,14 +4,14 @@
  * and the request come from one Schema. Untraced (catalog plumbing, not a generation request).
  * Failure is kept (status:'error' + message) → badges stay 「待确认」, never a guessed 会发送.
  */
-import { getStoredApiKeys } from './api';
+import { setFieldCapabilitySchemaLookup } from '../utils/fieldCapability';
 import { setLiveSchemaLookup } from '../utils/resolveCheckpoint';
 import { hasModelSchemaFetch } from '../utils/schemaSendHint';
 import { peekSharedGet, subscribeSharedGet } from './sharedGet';
 import { schemaRequestFor } from './userModelSelection';
 import { sizePairingFromSchemaProps, type SizePairing } from '../utils/localBlock';
 
-type Entry = { status: 'loading' | 'ready' | 'error'; properties?: string[]; propertiesObj?: Record<string, any>; sizePairing?: SizePairing; error?: string; schemaStatus?: string; unprobed?: boolean; confirmed?: string[]; required?: string[] };
+type Entry = { status: 'loading' | 'ready' | 'error'; properties?: string[]; propertiesObj?: Record<string, any>; inputSchema?: Record<string, unknown>; sizePairing?: SizePairing; error?: string; schemaStatus?: string; unprobed?: boolean; confirmed?: string[]; required?: string[] };
 const cache = new Map<string, Entry>();
 const listeners = new Set<() => void>();
 let version = 0;
@@ -25,6 +25,7 @@ export function getModelSchemaEntry(provider?: string | null, model?: string | n
   return cache.get(keyOf(provider.toLowerCase(), model));
 }
 setLiveSchemaLookup((p, m) => getModelSchemaEntry(p, m));
+setFieldCapabilitySchemaLookup((p, m) => getModelSchemaEntry(p, m));
 
 /**
  * clean-0903: NEVER fetches on render/mount/hydrate. Mirrors the action-scoped shared GET (sharedGet) that a user action
@@ -51,7 +52,7 @@ export function ensureModelSchema(provider?: string | null, model?: string | nul
       const data = r.data;
       const props = data?.inputSchema?.properties;
       cache.set(keyOf(p, m), r.ok && props && typeof props === 'object'
-        ? { status: 'ready', properties: Object.keys(props), propertiesObj: props, sizePairing: sizePairingFromSchemaProps(props), schemaStatus: data?.schemaStatus, unprobed: data?.schemaUnprobed === true, confirmed: Array.isArray(data?.schemaConfirmedFields) ? data.schemaConfirmedFields : [], required: Array.isArray(data?.inputSchema?.required) ? data.inputSchema.required.map(String) : [] }
+        ? { status: 'ready', properties: Object.keys(props), propertiesObj: props, inputSchema: data.inputSchema, sizePairing: sizePairingFromSchemaProps(props), schemaStatus: data?.schemaStatus, unprobed: data?.schemaUnprobed === true, confirmed: Array.isArray(data?.schemaConfirmedFields) ? data.schemaConfirmedFields : [], required: Array.isArray(data?.inputSchema?.required) ? data.inputSchema.required.map(String) : [] }
         : { status: 'error', error: `HTTP ${r.status} ${typeof data === 'object' ? JSON.stringify(data) : String(data ?? '')}` });
     })
     .catch((e) => cache.set(keyOf(p, m), { status: 'error', error: String(e?.message || e) }))

@@ -2,6 +2,7 @@ import {describe,expect,it} from 'vitest';
 import {
   canvasFieldMatchesSchema,
   isSchemaDrivenProvider,
+  isDeclaredSchemaFieldOmitted,
   isSchemaFieldsOnlyEnabled,
   isSchemaOmitCandidate,
   readDeclaredSchemaProperties,
@@ -16,6 +17,14 @@ const fluxProps = {
   guidance_scale: {},
   strength: {},
   styles: {},
+};
+
+const closedFluxCtx = {
+  schemaEntry: {
+    status: 'ready' as const,
+    propertiesObj: fluxProps,
+    inputSchema: { type: 'object', properties: fluxProps, additionalProperties: false },
+  },
 };
 
 describe('schemaSendHint', () => {
@@ -47,10 +56,15 @@ describe('schemaSendHint', () => {
     expect(canvasFieldMatchesSchema('cfg', fluxProps)).toBe(true);
   });
 
-  it('Krea flux-1-dev: sampler/scheduler absent from Schema — omit OK', () => {
+  it('open/array-only schemaProperties never guesses omit; closed inputSchema (additionalProperties:false) omits absent sampler/scheduler', () => {
     const custom = JSON.stringify({ _canvas: { schemaProperties: Object.keys(fluxProps) } });
-    expect(isSchemaOmitCandidate('krea', 'sampler', custom)).toBe(true);
-    expect(isSchemaOmitCandidate('krea', 'scheduler', custom)).toBe(true);
+    // Array-only list has no closure proof -> unknown (false)
+    expect(isSchemaOmitCandidate('krea', 'sampler', custom)).toBe(false);
+    expect(isSchemaOmitCandidate('krea', 'scheduler', custom)).toBe(false);
+    // Closed schema entry proves sampler/scheduler are unsupported -> true
+    expect(isSchemaOmitCandidate('krea', 'sampler', custom, undefined, closedFluxCtx)).toBe(true);
+    expect(isSchemaOmitCandidate('krea', 'scheduler', custom, undefined, closedFluxCtx)).toBe(true);
+    expect(isSchemaOmitCandidate('krea', 'cfg', custom, undefined, closedFluxCtx)).toBe(false);
   });
 
   it('reads schemaProperties from custom_parameters._canvas', () => {
@@ -66,8 +80,25 @@ describe('schemaSendHint', () => {
     expect(canvasFieldMatchesSchema('loras', fluxProps)).toBe(true);
   });
 
+  it('resolves fal and static-spec providers without the badge-provider gate', () => {
+    expect(isSchemaOmitCandidate('fal', 'sampler', undefined, ['prompt', 'seed'], { model: 'fal-ai/flux-lora' })).toBe(true);
+    expect(isSchemaOmitCandidate('fal', 'cfg', undefined, ['guidance_scale'], { model: 'fal-ai/flux-lora' })).toBe(false);
+    expect(isSchemaOmitCandidate('nanogpt', 'seed', undefined, undefined, { model: 'flux-schnell' })).toBe(true);
+    expect(isSchemaOmitCandidate('nanogpt', 'seed', undefined, undefined, { model: 'flux-dev' })).toBe(false); // unverified -> unknown -> false
+    expect(isSchemaOmitCandidate('runware', 'loras', undefined, undefined, { model: 'alibaba:qwen-image@3.0' })).toBe(true);
+  });
+
+  it('never hides custom JSON keys or fields while the schema is loading or failed', () => {
+    expect(isSchemaOmitCandidate('fal', 'sampler', '{"sampler_name":"euler"}', ['prompt'], { model: 'fal-ai/flux-lora' })).toBe(false);
+    for (const flag of ['schemaLoading', 'schemaUnavailable']) {
+      const cp = JSON.stringify({ _canvas: { [flag]: true, schemaProperties: ['prompt'] } });
+      expect(isSchemaOmitCandidate('nanogpt', 'seed', cp, undefined, { model: 'flux-schnell' })).toBe(false);
+      expect(isDeclaredSchemaFieldOmitted('seed', cp)).toBe(false);
+    }
+  });
+
   it('schemaFieldsOnly false disables omit badges', () => {
     const custom = JSON.stringify({ _canvas: { schemaFieldsOnly: false, schemaProperties: Object.keys(fluxProps) } });
-    expect(isSchemaOmitCandidate('krea', 'sampler', custom)).toBe(false);
+    expect(isSchemaOmitCandidate('krea', 'sampler', custom, undefined, closedFluxCtx)).toBe(false);
   });
 });
