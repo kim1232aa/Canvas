@@ -56,7 +56,7 @@ describe('schemaSendHint', () => {
     expect(canvasFieldMatchesSchema('cfg', fluxProps)).toBe(true);
   });
 
-  it('open/array-only schemaProperties never guesses omit; closed inputSchema (additionalProperties:false) omits absent sampler/scheduler', () => {
+  it('open/array-only schemaProperties never guesses omit; closed inputSchema (additionalProperties:false) or schemaClosed omits absent sampler/scheduler', () => {
     const custom = JSON.stringify({ _canvas: { schemaProperties: Object.keys(fluxProps) } });
     // Array-only list has no closure proof -> unknown (false)
     expect(isSchemaOmitCandidate('krea', 'sampler', custom)).toBe(false);
@@ -65,6 +65,20 @@ describe('schemaSendHint', () => {
     expect(isSchemaOmitCandidate('krea', 'sampler', custom, undefined, closedFluxCtx)).toBe(true);
     expect(isSchemaOmitCandidate('krea', 'scheduler', custom, undefined, closedFluxCtx)).toBe(true);
     expect(isSchemaOmitCandidate('krea', 'cfg', custom, undefined, closedFluxCtx)).toBe(false);
+    // schemaClosed: true evidence also proves sampler/scheduler are unsupported -> true
+    const closedCustom = JSON.stringify({ _canvas: { schemaProperties: Object.keys(fluxProps), schemaClosed: true } });
+    expect(isSchemaOmitCandidate('krea', 'sampler', closedCustom)).toBe(true);
+    expect(isSchemaOmitCandidate('krea', 'scheduler', closedCustom)).toBe(true);
+    expect(isSchemaOmitCandidate('krea', 'cfg', closedCustom)).toBe(false);
+  });
+
+  it('live OpenAPI provider without additionalProperties:false returns false (unknown) for array-only schemaProperties', () => {
+    for (const provider of ['replicate', 'muapi', 'together', 'aimlapi', 'novita', 'venice', 'wavespeed', 'krea']) {
+      const custom = JSON.stringify({ _canvas: { schemaProperties: ['prompt', 'seed'] } });
+      expect(isSchemaOmitCandidate(provider, 'steps', custom)).toBe(false);
+      expect(isSchemaOmitCandidate(provider, 'cfg', custom)).toBe(false);
+      expect(isSchemaOmitCandidate(provider, 'sampler', custom)).toBe(false);
+    }
   });
 
   it('reads schemaProperties from custom_parameters._canvas', () => {

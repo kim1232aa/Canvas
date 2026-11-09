@@ -439,14 +439,23 @@ export function historyFacingErrorMessage(err: unknown): string | undefined {
   const fromHist = typeof hist?.error === 'string' ? hist.error.trim() : '';
   const fromRoute = typeof data.error === 'string' ? data.error.trim() : '';
   const candidate = fromHist || fromRoute;
-  if (candidate) return candidate;
+  if (candidate) {
+    if (err instanceof Error && /^HTTP\s+\d{3}/i.test(err.message) && !/(?:HTTP\s+\d{3}|\[\d{3}\])/i.test(candidate)) {
+      return err.message;
+    }
+    return candidate;
+  }
   const body =
     (typeof data.upstreamResponseBody === 'string' && data.upstreamResponseBody) ||
     (typeof data.rawResponse === 'string' && data.rawResponse) ||
     (typeof data.details === 'string' && data.details) ||
     '';
   if (!body) return undefined;
-  return body.trim() || undefined;
+  const result = body.trim() || undefined;
+  if (result && err instanceof Error && /^HTTP\s+\d{3}/i.test(err.message) && !/(?:HTTP\s+\d{3}|\[\d{3}\])/i.test(result)) {
+    return err.message;
+  }
+  return result;
 }
 
 /** A run error is a local block iff its structured response body says so (errorSource local, no non-GET trace) — never by message text. */
