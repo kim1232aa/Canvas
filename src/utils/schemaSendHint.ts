@@ -56,7 +56,27 @@ export function schemaFieldContext(
   } catch { /* Invalid JSON is reported by the parameter editor. */ }
   const declared = schemaProperties ?? (scoped ? readDeclaredSchemaProperties(customParameters) : null);
   const keys = declared && (Symbol.iterator in Object(declared) ? Array.from(declared as Iterable<string>, String) : Object.keys(declared));
-  return { customParameters: effectiveCustom, ...(keys?.length ? { schemaEntry: { status: 'ready', propertiesObj: Object.fromEntries(keys.map((key) => [key, {}])) } } : {}) };
+  const isClosed = ctx?.provider ? hasSchemaSendBadges(ctx.provider) : false;
+  return {
+    customParameters: effectiveCustom,
+    ...(keys?.length
+      ? {
+          schemaEntry: {
+            status: 'ready',
+            propertiesObj: Object.fromEntries(keys.map((key) => [key, {}])),
+            ...(isClosed
+              ? {
+                  inputSchema: {
+                    type: 'object',
+                    properties: Object.fromEntries(keys.map((key) => [key, {}])),
+                    additionalProperties: false,
+                  },
+                }
+              : {}),
+          },
+        }
+      : {}),
+  };
 }
 
 export function isDeclaredSchemaFieldOmitted(

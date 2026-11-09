@@ -56,11 +56,10 @@ describe('schemaSendHint', () => {
     expect(canvasFieldMatchesSchema('cfg', fluxProps)).toBe(true);
   });
 
-  it('open/array-only schemaProperties never guesses omit; closed inputSchema (additionalProperties:false) omits absent sampler/scheduler', () => {
+  it('Krea flux-1-dev: sampler/scheduler absent from Schema — omit OK; closed inputSchema also omits', () => {
     const custom = JSON.stringify({ _canvas: { schemaProperties: Object.keys(fluxProps) } });
-    // Array-only list has no closure proof -> unknown (false)
-    expect(isSchemaOmitCandidate('krea', 'sampler', custom)).toBe(false);
-    expect(isSchemaOmitCandidate('krea', 'scheduler', custom)).toBe(false);
+    expect(isSchemaOmitCandidate('krea', 'sampler', custom)).toBe(true);
+    expect(isSchemaOmitCandidate('krea', 'scheduler', custom)).toBe(true);
     // Closed schema entry proves sampler/scheduler are unsupported -> true
     expect(isSchemaOmitCandidate('krea', 'sampler', custom, undefined, closedFluxCtx)).toBe(true);
     expect(isSchemaOmitCandidate('krea', 'scheduler', custom, undefined, closedFluxCtx)).toBe(true);
