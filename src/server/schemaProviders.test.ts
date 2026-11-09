@@ -1,6 +1,6 @@
 import express from 'express';
 import { describe, expect, it } from 'vitest';
-import { fetchSchemaProviderRows, fetchSogniGenerateImageSchema, isSogniPersonalLoraRow, normalizeSchemaProviderItems, registerSchemaProviderRoutes, resolveSchemaRefs, sogniAnimatePhotoSchemaSource, sogniGenerateVideoSchemaSource, sogniLoraCover, sogniLoraStrengthRange, sogniSchemaSource, upstreamReferenceUrlIssue, validateSogniLoraStrengthRanges } from './schemaProviders';
+import { aimlapiCatalogRows, fetchSchemaProviderRows, fetchSogniGenerateImageSchema, isSogniPersonalLoraRow, normalizeSchemaProviderItems, registerSchemaProviderRoutes, resolveSchemaRefs, sogniAnimatePhotoSchemaSource, sogniGenerateVideoSchemaSource, sogniLoraCover, sogniLoraStrengthRange, sogniSchemaSource, upstreamReferenceUrlIssue, validateSogniLoraStrengthRanges } from './schemaProviders';
 import { sogniGenerateImageSchemaFixture } from './fixtures/sogniGenerateImageSchema';
 import { sogniAnimatePhotoSchemaFixture, sogniGenerateVideoSchemaFixture } from './fixtures/sogniGenerateVideoSchema';
 
@@ -299,13 +299,25 @@ describe('safety-switch choices on the wire (registered submit route)', () => {
     });
   });
 
-  it('explicit true and explicit false go out verbatim, marker never sent', async () => {
+  it('explicit true and explicit false go out verbatim, marker never sent, and user vs ui_default sources are distinguished on both custom_parameters and nsfw_policy mappings', async () => {
     await submit({ disable_safety_checker: true, enable_safety_checker: false, _canvas: { nsfwOmitted: ['safe_mode'] } }, (sent, data) => {
       noMeta(sent, data);
       expect(sent.disable_safety_checker).toBe(true);
       expect(sent.enable_safety_checker).toBe(false);
       expect(data.actualRequest.parameters.disable_safety_checker).toBe(true);
       expect(data.actualRequest.parameters.enable_safety_checker).toBe(false);
+      expect(data.actualRequest.mapping.find((m: any) => m.from === 'custom_parameters.disable_safety_checker')).toMatchObject({
+        to: 'disable_safety_checker',
+        value: true,
+        source: 'user',
+        schemaDeclared: true,
+      });
+      expect(data.actualRequest.mapping.find((m: any) => m.from === 'custom_parameters.enable_safety_checker')).toMatchObject({
+        to: 'enable_safety_checker',
+        value: false,
+        source: 'user',
+        schemaDeclared: true,
+      });
       const nsfwMappings = data.actualRequest.mapping.filter((m: any) => String(m.from).startsWith('nsfw_policy.'));
       expect(nsfwMappings).toEqual([
         expect.objectContaining({
@@ -313,28 +325,101 @@ describe('safety-switch choices on the wire (registered submit route)', () => {
           to: 'disable_safety_checker',
           value: true,
           source: 'user',
-          note: expect.stringMatching(/custom_parameters.*未由后端注入/),
+          note: expect.stringMatching(/用户 custom_parameters.*未由后端注入/),
         }),
         expect.objectContaining({
           from: 'nsfw_policy.enable_safety_checker',
           to: 'enable_safety_checker',
           value: false,
           source: 'user',
-          note: expect.stringMatching(/custom_parameters.*未由后端注入/),
+          note: expect.stringMatching(/用户 custom_parameters.*未由后端注入/),
         }),
       ]);
+    });
+
+    // Restrictive user choice: nsfw_policy has 0 permissive entries, but custom_parameters.<field> still stamps source: 'user'
+    await submit({ disable_safety_checker: false, enable_safety_checker: true }, (sent, data) => {
+      noMeta(sent, data);
+      expect(sent.disable_safety_checker).toBe(false);
+      expect(sent.enable_safety_checker).toBe(true);
+      expect(data.actualRequest.mapping.filter((m: any) => String(m.from).startsWith('nsfw_policy.'))).toEqual([]);
+      expect(data.actualRequest.mapping.find((m: any) => m.from === 'custom_parameters.disable_safety_checker')).toMatchObject({
+        to: 'disable_safety_checker',
+        value: false,
+        source: 'user',
+        schemaDeclared: true,
+      });
+      expect(data.actualRequest.mapping.find((m: any) => m.from === 'custom_parameters.enable_safety_checker')).toMatchObject({
+        to: 'enable_safety_checker',
+        value: true,
+        source: 'user',
+        schemaDeclared: true,
+      });
+    });
+
+    // UI-seeded default recorded in _canvas.nsfwSeeded vs user-set field in the same request
+    await submit({ disable_safety_checker: true, enable_safety_checker: false, _canvas: { nsfwSeeded: ['enable_safety_checker'] } }, (sent, data) => {
+      noMeta(sent, data);
+      expect(sent.disable_safety_checker).toBe(true);
+      expect(sent.enable_safety_checker).toBe(false);
+      expect(data.actualRequest.mapping.find((m: any) => m.from === 'custom_parameters.disable_safety_checker')).toMatchObject({
+        to: 'disable_safety_checker',
+        value: true,
+        source: 'user',
+      });
+      expect(data.actualRequest.mapping.find((m: any) => m.from === 'custom_parameters.enable_safety_checker')).toMatchObject({
+        to: 'enable_safety_checker',
+        value: false,
+        source: 'ui_default',
+      });
+      expect(data.actualRequest.mapping.find((m: any) => m.from === 'nsfw_policy.disable_safety_checker')).toMatchObject({
+        to: 'disable_safety_checker',
+        value: true,
+        source: 'user',
+        note: expect.stringMatching(/用户 custom_parameters.*未由后端注入/),
+      });
+      expect(data.actualRequest.mapping.find((m: any) => m.from === 'nsfw_policy.enable_safety_checker')).toMatchObject({
+        to: 'enable_safety_checker',
+        value: false,
+        source: 'ui_default',
+        note: expect.stringMatching(/前端按官方 Schema 公开预填默认放开值.*未由后端隐式注入/),
+      });
     });
   });
 });
 
 describe('catalog-silent video routing', () => {
+  it('aimlapiCatalogRows classifies image-to-video and video-to-video as video (/video/generations), never image', () => {
+    const rows = aimlapiCatalogRows([
+      { id: 'klingai/v2-master-image-to-video', type: 'image-to-video', info: { name: 'Kling I2V' } },
+      { id: 'wan/v2.2-video-to-video', type: 'video-to-video', info: { name: 'Wan V2V' } },
+      { id: 'alibaba/z-image-turbo-lora', type: 'image', info: { name: 'Z Image' } },
+    ]);
+    expect(rows.find((r) => r.id === 'klingai/v2-master-image-to-video')).toMatchObject({
+      type: 'video',
+      category: 'text-to-video',
+      endpoint: '/video/generations',
+    });
+    expect(rows.find((r) => r.id === 'wan/v2.2-video-to-video')).toMatchObject({
+      type: 'video',
+      category: 'text-to-video',
+      endpoint: '/video/generations',
+    });
+    expect(rows.find((r) => r.id === 'alibaba/z-image-turbo-lora')).toMatchObject({
+      type: 'image',
+      category: 'text-to-image',
+      endpoint: '/images/generations',
+    });
+  });
+
   const routes = [
     { provider: 'aimlapi', image: 'https://api.aimlapi.com/v1/images/generations', video: 'https://api.aimlapi.com/v2/video/generations' },
     { provider: 'venice', image: 'https://api.venice.ai/api/v1/image/generate', video: 'https://api.venice.ai/api/v1/video/queue' },
+    { provider: 'together', image: 'https://api.together.ai/v1/images/generations', video: 'https://api.together.ai/v2/videos' },
   ];
   for (const { provider, image, video } of routes) {
     for (const catalog of ['failed', 'empty', 'missing-model', 'declared-image']) {
-      it.each([true, false, undefined])(`${provider}: ${catalog} catalog with isVideo=%s preserves route, mediaKind and upstream failure`, async (isVideo) => {
+      it.each([true, false, undefined])(`${provider}: ${catalog} catalog with isVideo=%s uses real GET query (no GET body) and never silently downgrades explicit video intent`, async (isVideo) => {
         const model = 'user-selected-model';
         const upstreamError = '{"error":{"message":"Invalid API key"}}';
         const calls: Array<{ url: string; init?: RequestInit }> = [];
@@ -349,7 +434,7 @@ describe('catalog-silent video routing', () => {
           },
           key: () => 'k', record: (i: any) => i, durable: async (u: string) => ({ ok: true, dataUrl: u }),
         } as any);
-        const expectedVideo = isVideo === true && catalog !== 'declared-image';
+        const expectedVideo = isVideo === true;
         const endpoint = expectedVideo ? video : image;
         const body = { model, prompt: 'A red paper boat drifting across a misty lake, cinematic wide shot', ...(isVideo === undefined ? {} : { isVideo }) };
 
@@ -357,7 +442,12 @@ describe('catalog-silent video routing', () => {
         let schema: any;
         const schemaRes: any = { statusCode: 200, status(c: number) { this.statusCode = c; return this; }, json(p: any) { schema = p; return this; } };
         await schemaLayer.route.stack[0].handle({
-          method: 'GET', path: '/api/model-schema', params: {}, query: { provider, model }, headers: {}, body,
+          method: 'GET',
+          path: '/api/model-schema',
+          params: {},
+          query: { provider, model, ...(isVideo === undefined ? {} : { isVideo: String(isVideo) }) },
+          headers: {},
+          body: undefined,
         }, schemaRes, () => {});
         expect(schemaRes.statusCode).toBe(200);
         expect(schema).toMatchObject({ endpoint, mediaKind: expectedVideo ? 'video' : 'image' });

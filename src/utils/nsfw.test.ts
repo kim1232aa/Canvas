@@ -195,9 +195,13 @@ describe('Official NSFW & Safety field facts', () => {
       });
     });
 
-    it('seeds permissive defaults into an empty custom_parameters when schema declares a switch', () => {
+    it('seeds permissive defaults into an empty custom_parameters when schema declares a switch, and records _canvas.nsfwSeeded when requested', () => {
       expect(JSON.parse(applyNsfwDefaultsToCustomParameters(undefined, { safe_mode: { type: 'boolean' } }))).toEqual({
         safe_mode: false,
+      });
+      expect(JSON.parse(applyNsfwDefaultsToCustomParameters(undefined, { safe_mode: { type: 'boolean' } }, { recordSeeded: true }))).toEqual({
+        safe_mode: false,
+        _canvas: { nsfwSeeded: ['safe_mode'] },
       });
       expect(applyNsfwDefaultsToCustomParameters(undefined, { prompt: { type: 'string' } })).toBe('{}');
     });
