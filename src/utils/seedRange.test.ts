@@ -1,17 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { seedRangeFor, seedRangeIssue, seedSchemaIssues, seedRangeAdvisory, randomSeedFor } from './seedRange';
-
-const ms = (seed: any, extra: any = {}) => ({ type: 'ModelScopeNode', title: '魔搭生成', values: { model_endpoint: 'Tongyi-MAI/Z-Image-Turbo', seed, ...extra } });
-
-/** Exact browser graph: CheckpointLoaderSimple (modelscope + Z-Image-Turbo) + KSampler seed. */
-const modelscopeCnBoard = (seed: number, control: string = 'fixed') => {
-  const nodes = [
-    { id: 'ckpt', type: 'CheckpointLoaderSimple', title: '加载底模', values: { targetProvider: 'modelscope', ckpt_name: 'Tongyi-MAI/Z-Image-Turbo' } },
-    { id: 'ks', type: 'KSampler', title: '采样器', values: { seed, control_after_generate: control, steps: 8, cfg: 1 } },
-  ];
-  const connections = [{ fromNodeId: 'ckpt', toNodeId: 'ks', fromSocketId: 'model', toSocketId: 'model' }];
-  return { nodes, connections };
-};
+import { seedRangeFor, seedRangeAdvisory, randomSeedFor } from './seedRange';
+import * as seedRangeModule from './seedRange';
 
 describe('seed range from model Schema (advisory only, never blocks pre-run)', () => {
   it('ModelScope static Schema has official seed range [0, 2^31-1] (hint / random)', () => {
@@ -20,38 +9,23 @@ describe('seed range from model Schema (advisory only, never blocks pre-run)', (
     expect(seedRangeFor('modelscope_ai', 'Tongyi-MAI/Z-Image-Turbo')).toEqual(r);
   });
 
-  it('seed -1 and out-of-range seeds are NEVER locally blocked for any provider', () => {
-    const n = ms(4294967295);
-    expect(seedSchemaIssues([n])).toBeNull();
-    expect(n.values.seed).toBe(4294967295);
-    expect(seedRangeIssue('modelscope', 'Tongyi-MAI/Z-Image-Turbo', -1)).toBeNull();
-    expect(seedRangeIssue('modelscope_ai', 'Tongyi-MAI/Z-Image-Turbo', 4294967295)).toBeNull();
-    expect(seedRangeIssue('fal', 'fal-ai/flux/dev', -1)).toBeNull();
-    expect(seedRangeIssue('venice', 'fluently-xl', -1)).toBeNull();
-    expect(seedRangeIssue('together', 'black-forest-labs/FLUX.1-schnell', -1)).toBeNull();
-    expect(seedRangeIssue('fal', 'fal-ai/flux/dev', 999999999999)).toBeNull();
-    expect(seedSchemaIssues([ms(1.5)])).toBeNull();
+  it('dead no-op seedSchemaIssues and seedRangeIssue are removed', () => {
+    expect('seedSchemaIssues' in seedRangeModule).toBe(false);
+    expect('seedRangeIssue' in seedRangeModule).toBe(false);
   });
 
   it('advisory helper treats -1 as valid random sentinel and gives non-blocking hint on out-of-range values', () => {
     expect(seedRangeAdvisory('modelscope', 'Tongyi-MAI/Z-Image-Turbo', -1)).toBeNull();
     expect(seedRangeAdvisory('modelscope', 'Tongyi-MAI/Z-Image-Turbo', 42)).toBeNull();
+    expect(seedRangeAdvisory('modelscope', 'Tongyi-MAI/Z-Image-Turbo', 2147483647)).toBeNull();
     const hint = seedRangeAdvisory('modelscope', 'Tongyi-MAI/Z-Image-Turbo', 4294967295);
     expect(hint).toContain('仅提示');
     expect(hint).not.toContain('未发送请求');
   });
 
-  it('in-range seed → allowed', () => {
-    expect(seedSchemaIssues([ms(42)])).toBeNull();
-    expect(seedSchemaIssues([ms(2147483647)])).toBeNull();
-  });
-
-  it('randomize mode skips stored value check', () => {
-    expect(seedSchemaIssues([ms(4294967295, { control_after_generate: 'randomize' })])).toBeNull();
-  });
-
-  it('no declared range → no block', () => {
-    expect(seedRangeIssue('unknownprov', 'x', 99999999999)).toBeNull();
+  it('no declared range -> no advisory warning', () => {
+    expect(seedRangeAdvisory('unknownprov', 'x', 99999999999)).toBeNull();
+    expect(seedRangeAdvisory('fal', 'missing-model-no-cache', 1)).toBeNull();
   });
 
   it('random seed for ModelScope stays inside official [0, 2^31-1]', () => {
@@ -60,39 +34,7 @@ describe('seed range from model Schema (advisory only, never blocks pre-run)', (
       expect(Number.isInteger(s)).toBe(true);
       expect(s).toBeGreaterThanOrEqual(0);
       expect(s).toBeLessThanOrEqual(2147483647);
-      expect(seedRangeIssue('modelscope', 'Qwen/Qwen-Image', s)).toBeNull();
+      expect(seedRangeAdvisory('modelscope', 'Qwen/Qwen-Image', s)).toBeNull();
     }
-  });
-
-  it('ROOT: CheckpointLoaderSimple modelscope + KSampler huge seed or -1 → no local hard block', () => {
-    const { nodes, connections } = modelscopeCnBoard(4294967295, 'fixed');
-    expect(seedSchemaIssues(nodes)).toBeNull();
-    expect(seedSchemaIssues(nodes, connections)).toBeNull();
-    expect(nodes[1].values.seed).toBe(4294967295);
-
-    const negOne = modelscopeCnBoard(-1, 'fixed');
-    expect(seedSchemaIssues(negOne.nodes, negOne.connections)).toBeNull();
-  });
-
-  it('ROOT: same graph with seed 42 → allowed', () => {
-    const { nodes, connections } = modelscopeCnBoard(42, 'fixed');
-    expect(seedSchemaIssues(nodes, connections)).toBeNull();
-  });
-
-  it('LoRA between checkpoint and KSampler still resolves provider/model (no hard block)', () => {
-    const nodes = [
-      { id: 'ckpt', type: 'CheckpointLoaderSimple', values: { targetProvider: 'modelscope', ckpt_name: 'Tongyi-MAI/Z-Image-Turbo' } },
-      { id: 'lora', type: 'LoRALoader', values: { lora_name: 'suayptalha/Z-Image-Turbo-Realism-LoRA', strength_model: 1 } },
-      { id: 'ks', type: 'KSampler', title: '采样器', values: { seed: 4294967295, control_after_generate: 'fixed' } },
-    ];
-    const connections = [
-      { fromNodeId: 'ckpt', toNodeId: 'lora', fromSocketId: 'model', toSocketId: 'model' },
-      { fromNodeId: 'lora', toNodeId: 'ks', fromSocketId: 'model', toSocketId: 'model' },
-    ];
-    expect(seedSchemaIssues(nodes, connections)).toBeNull();
-  });
-
-  it('unknown provider never blocks', () => {
-    expect(seedRangeIssue('fal', 'missing-model-no-cache', 1)).toBeNull();
   });
 });

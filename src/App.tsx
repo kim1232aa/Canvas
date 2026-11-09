@@ -5,7 +5,6 @@ import { findActualRequest, countActualRequestLoras } from './utils/actualReques
 import { modelSchemaVersion, subscribeModelSchema, getModelSizePairing } from './services/modelSchemaCache';
 import {migrateTensorWorkflow} from './utils/legacyTensorWorkflow';
 import {spatialRequestParameters} from './utils/frontendParameters';
-import {seedSchemaIssues} from './utils/seedRange';
 import {replaceSelectedResource,applyLoraNameToNodeValues,type ResourceSelection} from './utils/resourceSelection';
 import {readInspectorParameters,patchInspectorBranchNode,patchSpatialParameters,variationReference,modelCheckpoint,clearLoaderSize,loadersFedByLatent} from './utils/inspectorParameters';
 import {explicitProvider,graphBranch,catalogModelTarget} from './utils/graphEditing';
@@ -110,23 +109,24 @@ import {
   LORA_LOADER_TYPES,
 } from './utils/providerLabels';
 
-export function maskWalletAddresses(text: string): string {
-  return String(text ?? '').replace(/0x[a-fA-F0-9]{40}/g, '0x<redacted-wallet>');
-}
-
 export function formatExecutionStatusText(statusText: string, elapsedSec: number): string {
-  if (
-    statusText.startsWith('[4/5]') ||
-    statusText.includes('正在向') ||
-    statusText.includes('等待渲染') ||
-    statusText.includes('请求进行中') ||
-    statusText.includes('官方算力')
-  ) {
-    return elapsedSec < 2
-      ? '正在提交请求至云端服务商...'
-      : `等待上游返回结果 (已耗时 ${elapsedSec}秒)...`;
+  const text = String(statusText ?? '');
+  if (!text) return '';
+  if (/\(已耗时\s*\d+\s*s/.test(text)) {
+    return text.replace(/\(已耗时\s*\d+\s*s/g, `(已耗时 ${elapsedSec}秒`);
   }
-  return maskWalletAddresses(statusText);
+  if (
+    elapsedSec > 0 &&
+    !text.includes('已耗时') &&
+    (text.startsWith('[4/5]') ||
+      text.includes('正在向') ||
+      text.includes('等待渲染') ||
+      text.includes('请求进行中') ||
+      text.includes('官方算力'))
+  ) {
+    return `${text} (已耗时 ${elapsedSec}秒)`;
+  }
+  return text;
 }
 
 export default function App() {
@@ -146,14 +146,7 @@ export default function App() {
 
   // Execution States
   const [isExecuting, setIsExecuting] = useState(false);
-  const [executionStatusText, setExecutionStatusTextRaw] = useState('');
-  const setExecutionStatusText = (value: React.SetStateAction<string>) => {
-    if (typeof value === 'function') {
-      setExecutionStatusTextRaw((prev) => maskWalletAddresses(value(prev)));
-      return;
-    }
-    setExecutionStatusTextRaw(maskWalletAddresses(value));
-  };
+  const [executionStatusText, setExecutionStatusText] = useState('');
   const [executionProgress, setExecutionProgress] = useState(0);
 
   // Floating Notification Toast State
@@ -171,23 +164,7 @@ export default function App() {
     /** Keep this error visible even while HistoryModal is open (history-delete failures are not shown on any history card). */
     alwaysVisible?: boolean;
   };
-  const [toast, setToastRaw] = useState<StudioToast | null>(null);
-  const maskStudioToast = (next: StudioToast | null): StudioToast | null => {
-    if (!next) return null;
-    return {
-      ...next,
-      title: maskWalletAddresses(next.title),
-      message: maskWalletAddresses(next.message),
-      localWrapper: next.localWrapper ? maskWalletAddresses(next.localWrapper) : next.localWrapper,
-    };
-  };
-  const setToast = (value: React.SetStateAction<StudioToast | null>) => {
-    if (typeof value === 'function') {
-      setToastRaw((prev) => maskStudioToast(value(prev)));
-      return;
-    }
-    setToastRaw(maskStudioToast(value));
-  };
+  const [toast, setToast] = useState<StudioToast | null>(null);
   const [toastThumbSettle, setToastThumbSettle] = useState<PreviewSettleState>('loading');
   const toastThumbSettleRef = useRef<PreviewSettleState>('loading');
 
@@ -1282,7 +1259,25 @@ export default function App() {
           if (ok === false) {
             const label = friendlyProviderLabel(prov) || prov;
             const message = `未配置 ${label} 的密钥`;
-            setNodes((prev) => clearPriorMediaPreviews(prev));
+            const precheckBranch = graphBranch(activeNodes, activeConns, targetNodeId || effectiveSelectedNodeId);
+            const targetErrorId = precheckBranch.target?.id ?? runTarget.id;
+            setNodes((prev) =>
+              clearPriorMediaPreviews(prev).map((n) =>
+                n.id === targetErrorId
+                  ? {
+                      ...n,
+                      state: 'error' as NodeInstance['state'],
+                      executionProgress: 0,
+                      errorMessage: message,
+                      errorAt: new Date().toISOString(),
+                      errorKind: 'missing-key' as const,
+                      errorProvider: prov,
+                      errorStatusCode: undefined,
+                      errorEndpoint: undefined,
+                    }
+                  : n
+              )
+            );
             setToast({ type: 'warning', title: '未配置密钥', message, action: 'api-settings', actionProviderId: prov });
             setExecutionStatusText(`未配置密钥：${message}`);
             return;
@@ -1321,7 +1316,10 @@ export default function App() {
       const elapsed = Math.floor((Date.now() - runStartTime) / 1000);
       setExecutionStatusText((prev) => {
         if (!prev || prev.includes('完成') || prev.includes('失败')) return prev;
-        return elapsed < 2 ? '正在提交请求至云端服务商...' : `等待上游返回结果 (已耗时 ${elapsed}秒)...`;
+        if (prev === '正在提交请求至云端服务商...' || prev.startsWith('等待上游返回结果')) {
+          return elapsed < 2 ? '正在提交请求至云端服务商...' : `等待上游返回结果 (已耗时 ${elapsed}秒)...`;
+        }
+        return formatExecutionStatusText(prev, Math.max(1, elapsed));
       });
     }, 1000);
     setToast(null); // drop stale global notices from prior hub/search/run
@@ -1362,6 +1360,9 @@ export default function App() {
                   ? (errorMessage ? new Date().toISOString() : undefined)
                   : n.errorAt),
               errorKind: state === 'running' || state === 'success' || errorMessage !== undefined ? undefined : n.errorKind,
+              errorProvider: state === 'running' || state === 'success' || errorMessage !== undefined ? undefined : n.errorProvider,
+              errorStatusCode: state === 'running' || state === 'success' || errorMessage !== undefined ? undefined : n.errorStatusCode,
+              errorEndpoint: state === 'running' || state === 'success' || errorMessage !== undefined ? undefined : n.errorEndpoint,
               upstreamFailed: state === 'running' || state === 'success' ? false : n.upstreamFailed,
               upstreamFailedTitle: state === 'running' || state === 'success' ? undefined : n.upstreamFailedTitle,
               upstreamFailedMessage: state === 'running' || state === 'success' ? undefined : n.upstreamFailedMessage,
@@ -1457,7 +1458,6 @@ export default function App() {
     } catch (err: any) {
       console.error('Queue error:', err);
       setExecutionProgress(0);
-      // P0: plain primary on node + status bar; JSON / [500] / request_id stay in exec-log 技术细节.
       const localBlockedRun = isLocalBlockError(err);
       // Model-schema lookup failed (GET /api/model-schema non-2xx, generation never sent): plain headline on the model node;
       // the raw GET URL + status stay in 执行记录 (traced request) and the history failure card.
@@ -1490,6 +1490,13 @@ export default function App() {
       const failedTitle = failedNode ? failedNodeDisplayTitle(failedNode) : undefined;
       const downstream=new Set<string>();
       {const queue=branch.target?[branch.target.id]:[];while(queue.length){const id=queue.shift()!;for(const c of activeConns)if(c.fromNodeId===id&&!downstream.has(c.toNodeId)&&!branch.ids.has(c.toNodeId)){downstream.add(c.toNodeId);queue.push(c.toNodeId);}}}
+      const missingKey = err?.errorKind === 'missing-key';
+      const targetStatusCode = [err?.upstreamStatus, err?.status, err?.appStatus, toastInfo?.status]
+        .find((status): status is number => typeof status === 'number' && Number.isFinite(status));
+      const errorProvider = typeof err?.provider === 'string' && err.provider.trim()
+        ? err.provider.trim()
+        : toastInfo?.provider || resolveCheckpointForNode(branch.target?.id || '', activeNodes, activeConns).provider || undefined;
+      const settingsAction = missingKey || targetStatusCode === 401;
       setNodes(prev=>prev.map(n=>{
         // clean-0006: local block must NOT wipe upstream failure badges (errorMessage/errorAt).
         // Those stay until the next successful run; only local chrome is layered on top.
@@ -1531,7 +1538,9 @@ export default function App() {
           // The failed node shows the full upstream text verbatim (status + body); nothing on the others.
           errorMessage: isTarget ? upstreamMsg : undefined,
           errorAt: isTarget ? new Date().toISOString() : undefined,
-          errorStatusCode: isTarget ? ((err as any)?.upstreamStatus ?? (err as any)?.appStatus) : undefined,
+          errorStatusCode: isTarget ? targetStatusCode : undefined,
+          errorKind: isTarget && missingKey ? 'missing-key' as const : undefined,
+          errorProvider: isTarget ? errorProvider : undefined,
           errorEndpoint: isTarget ? (err as any)?.endpoint : undefined,
           upstreamFailed: false,
           upstreamFailedTitle: undefined,
@@ -1549,18 +1558,16 @@ export default function App() {
           title: toastInfo.title,
           message: toastInfo.message,
           localWrapper: toastInfo.localWrapper,
-          action: toastInfo.status === 401 ? 'api-settings' : undefined,
-          actionProviderId: toastInfo.status === 401 ? (toastInfo.provider || branch.target?.values?.targetProvider) : undefined,
+          action: settingsAction ? 'api-settings' : undefined,
+          actionProviderId: settingsAction ? errorProvider : undefined,
         });
       } else {
-        const missingKeyMatch = String(upstreamMsg || errMsg).match(/未配置\s*([a-zA-Z0-9_-]+)\s*的密钥/);
-        const missingKeyProv = missingKeyMatch ? missingKeyMatch[1] : undefined;
         setToast({
           type: 'error',
           title: blockTitle || '工作流生成失败',
           message: blockReason || upstreamMsg || errMsg,
-          action: missingKeyProv ? 'api-settings' : undefined,
-          actionProviderId: missingKeyProv,
+          action: settingsAction ? 'api-settings' : undefined,
+          actionProviderId: settingsAction ? errorProvider : undefined,
         });
       }
 
@@ -2765,7 +2772,10 @@ export default function App() {
             }}
             onClearCanvas={handleClearCanvas}
             onOpenWorkflowPresets={() => setIsWorkflowPresetsOpen(true)}
-            onOpenSettings={() => setIsSettingsOpen(true)}
+            onOpenSettings={(provId?: string) => {
+              if (provId) setSettingsInitialProvider(provId);
+              setIsSettingsOpen(true);
+            }}
             onAddSpatialFrame={handleAddSpatialFrame}
           />
         );

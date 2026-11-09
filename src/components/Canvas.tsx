@@ -54,7 +54,7 @@ interface CanvasProps {
   onOpenModelHub?: (category?: any) => void;
   onClearCanvas?: (type: 'all' | 'nodes' | 'frames' | 'reset-default') => void;
   onOpenWorkflowPresets?: () => void;
-  onOpenSettings?: () => void;
+  onOpenSettings?: (providerId?: string) => void;
   onAddSpatialFrame?: () => void;
 }
 
@@ -713,7 +713,7 @@ export const Canvas: React.FC<CanvasProps> = ({
             {onOpenSettings && (
               <button
                 type="button"
-                onClick={onOpenSettings}
+                onClick={() => onOpenSettings()}
                 className="px-3 py-2 rounded-xl bg-[#20222c] hover:bg-[#282a37] text-slate-200 hover:text-white font-semibold text-xs border border-[#303342] flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <Settings className="w-3.5 h-3.5 text-cyan-400" />

@@ -48,7 +48,7 @@ export function clearPriorMediaPreviews(nodes: NodeInstance[]): NodeInstance[] {
 
 /** Drop prior run media/error from the client request snapshot; sync CheckpointLoader title to current provider. */
 export function sanitizeExecutionSnapshotNodes(nodes: NodeInstance[]): NodeInstance[] {
-  return nodes.map(({ outputData: _outputData, errorMessage: _errorMessage, errorAt: _errorAt, errorKind: _errorKind, executionProgress: _executionProgress, ...node }) => {
+  return nodes.map(({ outputData: _outputData, errorMessage: _errorMessage, errorAt: _errorAt, errorKind: _errorKind, errorProvider: _errorProvider, errorStatusCode: _errorStatusCode, errorEndpoint: _errorEndpoint, executionProgress: _executionProgress, ...node }) => {
     const title =
       node.type === 'CheckpointLoaderSimple'
         ? checkpointNodeTitle(node.values?.targetProvider, node.values?.ckpt_name)
@@ -112,6 +112,9 @@ export function clearNodeExecutionErrors(
       errorMessage: undefined,
       errorAt: undefined,
       errorKind: undefined,
+      errorProvider: undefined,
+      errorStatusCode: undefined,
+      errorEndpoint: undefined,
       errorModel: undefined,
       executionProgress: n.state === 'error' ? 0 : n.executionProgress,
       ...(n.state === 'error' && MEDIA_OUTPUT_NODE_TYPES.has(n.type) ? { outputData: undefined } : {}),

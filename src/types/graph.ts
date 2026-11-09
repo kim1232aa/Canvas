@@ -90,8 +90,11 @@ export interface NodeInstance {
   errorMessage?: string;
   /** ISO time the upstream failure was recorded (clean-1651: badge shows 「上一次」+ 北京时间). */
   errorAt?: string;
-  /** 'schema' = model-schema lookup failed before any generation request; shown on the model node as a plain headline + raw body. */
-  errorKind?: 'schema';
+  /** 'schema' = model-schema lookup failed; 'missing-key' = an explicit local credential check failed. */
+  errorKind?: 'schema' | 'missing-key';
+  errorProvider?: string;
+  errorStatusCode?: number;
+  errorEndpoint?: string;
   /** Model id (ckpt_name) that caused the schema-miss; used to clear when the user changes the model. */
   errorModel?: string;
   /** Set on downstream branch nodes when this run failed upstream (no media produced). */

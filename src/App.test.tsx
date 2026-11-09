@@ -15,7 +15,7 @@ const AIR = 'urn:air:krea2:diffusionmodel:civitai:2732656@3072332';
 const LORA_A = 'urn:air:krea2:lora:civitai:2744585@3168308';
 const LORA_B = 'urn:air:krea2:lora:civitai:929497@3077110';
 
-describe('App civitai import load', () => {
+describe('App civitai import load', { timeout: 30000 }, () => {
   let host: HTMLDivElement | null = null;
   let root: Root | null = null;
 
@@ -438,7 +438,7 @@ describe('M108: AIVideoNode and cloud engine recommendation routing', { timeout:
   });
 });
 
-describe('M130: preset load and run clears stale selectedNodeId and initiates run', () => {
+describe('M130: preset load and run clears stale selectedNodeId and initiates run', { timeout: 30000 }, () => {
   let host: HTMLDivElement | null = null;
   let root: Root | null = null;
 
@@ -531,4 +531,139 @@ describe('M130: preset load and run clears stale selectedNodeId and initiates ru
     expect(calledUrls.some((url) => url.includes('/api/huggingface') || url.includes('/generate'))).toBe(true);
   });
 });
+
+describe('M139: honest progress and structural authentication errors', { timeout: 30000 }, () => {
+  beforeEach(() => { localStorage.clear(); vi.restoreAllMocks(); });
+  afterEach(async () => {
+    await act(async () => root?.unmount());
+    document.body.innerHTML = '';
+    localStorage.clear();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  async function mountRun(keyConfigured = true) {
+    const graph = board();
+    graph.nodes[0].values = { ckpt_name: 'wavespeed-ai/z-image/turbo', targetProvider: 'wavespeed' };
+    localStorage.setItem(BOARDS_KEY, JSON.stringify([graph]));
+    localStorage.setItem(ACTIVE_BOARD_KEY, graph.id);
+    localStorage.setItem(MODE_KEY, 'graph');
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => new Response(
+      String(url).includes('/api/provider-key-status')
+        ? JSON.stringify({ providers: { wavespeed: { configured: keyConfigured } } })
+        : '[]',
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    )));
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => { root.render(<App />); });
+    await settle();
+    const run = host.querySelector('[data-testid="run-button"]') as HTMLButtonElement;
+    expect(run).not.toBeNull();
+    expect(run.disabled).toBe(false);
+    await act(async () => { run.click(); });
+    await settle();
+  }
+
+  const errorStrip = () => host.querySelector('#node-ks [data-testid="node-error-strip"]');
+  const keyButton = () => Array.from(errorStrip()?.querySelectorAll('button') || []).find(b => b.textContent?.includes('去配置密钥'));
+
+  it('keeps 0x+40 hex error strings verbatim in the toast and status, and stores numeric err.status', async () => {
+    const { EngineRegistry } = await import('./engines/EngineRegistry');
+    const { httpErrorFromResponse } = await import('./utils/apiFailure');
+    const message = 'Account 0x1234567890abcdef1234567890abcdef12345678 has insufficient balance';
+    const error = await httpErrorFromResponse(new Response(JSON.stringify({ error: message }), { status: 402, statusText: 'Payment Required' }));
+    vi.spyOn(EngineRegistry, 'generate').mockRejectedValueOnce(error);
+    await mountRun();
+    expect(host.querySelector('#studio-run-status')?.textContent).toBe(error.message);
+    expect(host.querySelector('[data-testid="toast-first-line"]')?.textContent).toBe(error.message);
+    const failedNode = saved().nodes.find((n: any) => n.id === 'ks');
+    expect(failedNode.errorStatusCode).toBe(402);
+    expect(failedNode.errorKind).toBeUndefined();
+    expect(keyButton()).toBeUndefined();
+  });
+
+  it('marks the existing local key precheck structurally and opens its provider without inventing an HTTP status', async () => {
+    const { EngineRegistry } = await import('./engines/EngineRegistry');
+    const generate = vi.spyOn(EngineRegistry, 'generate');
+    await mountRun(false);
+    const failed = saved().nodes.find((n: any) => n.id === 'ks');
+    expect(failed).toMatchObject({ errorKind: 'missing-key', errorProvider: 'wavespeed', state: 'error' });
+    expect(failed.errorStatusCode).toBeUndefined();
+    expect(failed.errorSource).toBeUndefined();
+    expect(generate).not.toHaveBeenCalled();
+    expect(keyButton()).toBeDefined();
+    await act(async () => { keyButton()!.click(); });
+    expect(document.querySelector('[data-testid="api-settings-active-provider"]')?.getAttribute('data-provider-tab')).toBe('wavespeed');
+  });
+
+  it.each([
+    { error: Object.assign(new Error('Local credentials absent'), { errorKind: 'missing-key', provider: 'wavespeed' }), expected: true },
+    { error: new Error('未配置 wavespeed 的密钥'), expected: false },
+    { error: Object.assign(new Error('未配置 wavespeed 的密钥'), { status: 500 }), expected: false },
+    { error: Object.assign(new Error('未配置 wavespeed 的密钥'), { status: 402 }), expected: false },
+    { error: Object.assign(new Error('Unauthorized'), { status: 401 }), expected: true },
+  ])('classifies caught errors from fields only: $error / $expected', async ({ error, expected }) => {
+    const { EngineRegistry } = await import('./engines/EngineRegistry');
+    vi.spyOn(EngineRegistry, 'generate').mockRejectedValueOnce(error);
+    await mountRun();
+    expect(errorStrip()).not.toBeNull();
+    expect(Boolean(keyButton())).toBe(expected);
+    expect(Boolean(host.querySelector('[data-testid="toast-action-api-settings"]'))).toBe(expected);
+    const failed = saved().nodes.find((n: any) => n.id === 'ks');
+    expect(failed.errorKind).toBe((error as any).errorKind);
+    expect(failed.errorStatusCode).toBe((error as any).status);
+    if (expected) {
+      await act(async () => { keyButton()!.click(); });
+      expect(document.querySelector('[data-testid="api-settings-active-provider"]')?.getAttribute('data-provider-tab')).toBe('wavespeed');
+    }
+  });
+
+  it('clears the previous missing-key kind on run start, success, and direct provider edits', async () => {
+    const { EngineRegistry } = await import('./engines/EngineRegistry');
+    await mountRun(false);
+    expect(saved().nodes.find((n: any) => n.id === 'ks').errorKind).toBe('missing-key');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ providers: { wavespeed: { configured: true } } }), { status: 200 })));
+    let finish!: (value: any) => void;
+    vi.spyOn(EngineRegistry, 'generate').mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+    const run = host.querySelector('[data-testid="run-button"]') as HTMLButtonElement;
+    await act(async () => { run.click(); });
+    await settle();
+    expect(saved().nodes.find((n: any) => n.id === 'ks').errorKind).toBeUndefined();
+    expect(saved().nodes.find((n: any) => n.id === 'ks').errorProvider).toBeUndefined();
+    expect(keyButton()).toBeUndefined();
+    await act(async () => { finish({ mediaUrl: '/result.png', provider: 'WaveSpeed', model: 'wavespeed-ai/z-image/turbo', seed: 42 }); });
+    await settle();
+    expect(saved().nodes.find((n: any) => n.id === 'ks').errorKind).toBeUndefined();
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ providers: { wavespeed: { configured: false } } }), { status: 200 })));
+    await act(async () => { run.click(); });
+    await settle();
+    expect(saved().nodes.find((n: any) => n.id === 'ks').errorKind).toBe('missing-key');
+    const providerSelect = Array.from(host.querySelectorAll('#node-ck select')).find(s => Array.from((s as HTMLSelectElement).options).some(o => o.value === 'fal')) as HTMLSelectElement;
+    expect(providerSelect).toBeDefined();
+    await act(async () => { providerSelect.value = 'fal'; providerSelect.dispatchEvent(new Event('change', { bubbles: true })); });
+    expect(saved().nodes.find((n: any) => n.id === 'ks').errorKind).toBeUndefined();
+    expect(saved().nodes.find((n: any) => n.id === 'ks').errorProvider).toBeUndefined();
+    expect(keyButton()).toBeUndefined();
+  });
+
+  it('drops error metadata on snapshot, full clear, and session restoration', async () => {
+    const { clearNodeExecutionErrors, sanitizeExecutionSnapshotNodes } = await import('./utils/graphEngine');
+    const { resetRunState } = await import('./utils/workspaceCache');
+    const graph = board();
+    const failed = { ...graph.nodes[4], state: 'error', errorMessage: 'Credentials absent', errorKind: 'missing-key', errorProvider: 'wavespeed', errorStatusCode: 401, errorEndpoint: '/own-node' } as any;
+    for (const cleared of [
+      clearNodeExecutionErrors([failed])[0],
+      sanitizeExecutionSnapshotNodes([failed])[0],
+      resetRunState({ ...graph, nodes: [failed] } as any).nodes[0],
+    ]) {
+      expect(cleared.errorKind).toBeUndefined();
+      expect(cleared.errorProvider).toBeUndefined();
+      expect(cleared.errorStatusCode).toBeUndefined();
+      expect(cleared.errorEndpoint).toBeUndefined();
+    }
+  });
+});
+
 

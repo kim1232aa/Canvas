@@ -6,6 +6,7 @@ interface NodeErrorDisclosureProps {
   provider?: string;
   endpoint?: string;
   statusCode?: number | string;
+  errorKind?: 'schema' | 'missing-key';
   errorAt?: string;
   onOpenSettings?: (providerId?: string) => void;
 }
@@ -15,19 +16,24 @@ interface NodeErrorDisclosureProps {
  * Project iron rule: NEVER invent a diagnosis the upstream did not make!
  * Strictly: provider + HTTP status (if parsed) + first line of the verbatim body.
  */
-export function summarizeErrorMessage(rawMessage: string, providerHint?: string, statusCodeProp?: number | string): {
+export function summarizeErrorMessage(
+  rawMessage: string,
+  providerHint?: string,
+  statusCodeProp?: number | string,
+  errorKindProp?: NodeErrorDisclosureProps['errorKind'],
+): {
   headline: string;
   isMissingKey: boolean;
   provider?: string;
   statusCode?: number;
 } {
   const text = String(rawMessage || '').trim();
-  const lower = text.toLowerCase();
 
-  // Parse HTTP status ONLY from /HTTP\s+(\d{3})/i or explicit statusCodeProp, NEVER from a bare number in the body
+  const rawStatusStr = statusCodeProp != null ? String(statusCodeProp).trim() : '';
+  // Parse HTTP status ONLY from /HTTP\s+(\d{3})/i or explicit numeric statusCodeProp, NEVER from a bare number in the body
   let statusCode: number | undefined;
-  if (statusCodeProp != null && String(statusCodeProp).trim() !== '' && !Number.isNaN(Number(statusCodeProp))) {
-    statusCode = Number(statusCodeProp);
+  if (rawStatusStr !== '' && Number.isFinite(Number(rawStatusStr))) {
+    statusCode = Number(rawStatusStr);
   } else {
     const httpMatch = text.match(/HTTP\s+(\d{3})/i);
     statusCode = httpMatch ? parseInt(httpMatch[1], 10) : undefined;
@@ -52,8 +58,7 @@ export function summarizeErrorMessage(rawMessage: string, providerHint?: string,
     headline = `${provPrefix}${firstLine}`;
   }
 
-  // Pure factual flag for settings action button: ONLY when statusCode === 401
-  const isMissingKey = statusCode === 401;
+  const isMissingKey = statusCode === 401 || errorKindProp === 'missing-key';
 
   return { headline, isMissingKey, provider: prov, statusCode };
 }
@@ -63,20 +68,27 @@ export const NodeErrorDisclosure: React.FC<NodeErrorDisclosureProps> = ({
   provider,
   endpoint,
   statusCode,
+  errorKind,
   errorAt,
   onOpenSettings,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const { headline, isMissingKey, provider: detectedProvider } = summarizeErrorMessage(errorMessage, provider, statusCode);
+  const {
+    headline,
+    isMissingKey,
+    provider: detectedProvider,
+    statusCode: numericStatusCode,
+  } = summarizeErrorMessage(errorMessage, provider, statusCode, errorKind);
+  const settingsProviderId = detectedProvider?.toLowerCase();
 
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
     const diagnostic = [
       `服务商: ${detectedProvider || '未指定'}`,
       endpoint ? `端点: ${endpoint}` : null,
-      statusCode ? `状态码: ${statusCode}` : null,
+      numericStatusCode != null ? `状态码: ${numericStatusCode}` : null,
       errorAt ? `发生时间: ${errorAt}` : null,
       `--- 原始报错信息 ---`,
       errorMessage,
@@ -105,7 +117,7 @@ export const NodeErrorDisclosure: React.FC<NodeErrorDisclosureProps> = ({
             {isMissingKey && onOpenSettings && (
               <button
                 type="button"
-                onClick={() => onOpenSettings(detectedProvider?.toLowerCase())}
+                onClick={() => onOpenSettings(settingsProviderId)}
                 className="shrink-0 px-2 py-0.5 rounded bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-300 text-[10px] font-medium flex items-center gap-1 transition-colors"
                 title="打开设置并定位到该服务商"
               >
@@ -157,10 +169,10 @@ export const NodeErrorDisclosure: React.FC<NodeErrorDisclosureProps> = ({
                   <span className="text-slate-200 break-all">{endpoint}</span>
                 </div>
               )}
-              {statusCode != null && String(statusCode).trim() !== '' && (
+              {numericStatusCode != null && (
                 <div className="flex items-center justify-between" data-testid="error-disclosure-status">
                   <span className="text-slate-400">HTTP 状态码:</span>
-                  <span className="text-rose-400 font-bold">{statusCode}</span>
+                  <span className="text-rose-400 font-bold">{numericStatusCode}</span>
                 </div>
               )}
               {errorAt && (
