@@ -1248,8 +1248,11 @@ export default function App() {
     const activeNodes = overrideNodes || nodes;
     const activeConns = overrideConns || connections;
     let runTarget: ReturnType<typeof resolveRunTarget> | undefined;
+    const effectiveSelectedNodeId = (overrideNodes && selectedNodeId && !activeNodes.some((n) => n.id === selectedNodeId))
+      ? undefined
+      : selectedNodeId;
     if (activeNodes.length) {
-      try { runTarget = resolveRunTarget(activeNodes, activeConns, targetNodeId, selectedNodeId); }
+      try { runTarget = resolveRunTarget(activeNodes, activeConns, targetNodeId, effectiveSelectedNodeId); }
       catch (error: any) {
         const message = error.message;
         setToast({type:'warning', title:'未发送请求', message});
@@ -1606,6 +1609,7 @@ export default function App() {
     preset = migrateTensorWorkflow(preset);
     const newNodes = JSON.parse(JSON.stringify(preset.nodes));
     const newConns = JSON.parse(JSON.stringify(preset.connections));
+    setSelectedNodeId(null);
     setNodes(newNodes);
     setConnections(newConns);
     if (preset.spatialFrames && preset.spatialFrames.length > 0) {
@@ -2115,6 +2119,7 @@ export default function App() {
   const handleLoadPreset = (preset: WorkflowPreset, mode: 'replace' | 'append') => {
     preset = migrateTensorWorkflow(preset);
     if (mode === 'replace') {
+      setSelectedNodeId(null);
       setToast(null);
       setExecutionStatusText('');
       setNodes(JSON.parse(JSON.stringify(preset.nodes)));

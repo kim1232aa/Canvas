@@ -222,6 +222,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
   const greyWidthHeight = greyWidth || greyHeight;
 
   const [isRefining, setIsRefining] = React.useState(false);
+  const [refineError, setRefineError] = React.useState<string | null>(null);
   const [isReasoning, setIsReasoning] = React.useState(false);
   const [reasoningError, setReasoningError] = React.useState<string | null>(null);
   const [copiedRefined, setCopiedRefined] = React.useState(false);
@@ -312,11 +313,12 @@ export const NodeItem: React.FC<NodeItemProps> = ({
   const handleRefinePrompt = async () => {
     const currentPrompt = node.values.text || '';
     if (!currentPrompt) return;
+    setRefineError(null);
     const selection = getRefineModelSelection();
     const provider = node.values.refineProvider || node.values.provider || selection.provider;
     const model = node.values.refineModel || node.values.model || selection.model;
     if (!provider || !model) {
-      alert('请先选择润色模型');
+      setRefineError('请先在节点下拉或总控台中选择润色服务商与模型；不会自动切换服务商。');
       return;
     }
     setIsRefining(true);
@@ -329,7 +331,11 @@ export const NodeItem: React.FC<NodeItemProps> = ({
         onUpdateValue(node.id, 'text', refined);
       }
     } catch (e: any) {
-      alert(e.message || '润色失败');
+      const status = typeof e?.status === 'number' ? `HTTP ${e.status}` : '';
+      const raw = typeof e?.responseBody === 'string' && e.responseBody.trim()
+        ? e.responseBody
+        : e?.message || '润色失败';
+      setRefineError(`${status ? `润色失败（${status}）` : '润色失败'}：${raw}`);
       console.error(e);
     } finally {
       setIsRefining(false);
@@ -1172,6 +1178,11 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                       )}
                     </div>
                   </div>
+                  {isPositiveCLIP && refineError && (
+                    <div role="alert" data-testid="node-refine-error" className="rounded border border-rose-900/60 bg-rose-950/30 p-2 text-[10px] leading-relaxed text-rose-200">
+                      <pre className="whitespace-pre-wrap break-all font-mono">{refineError}</pre>
+                    </div>
+                  )}
                   <textarea
                     rows={4}
                     value={greyThisNegative ? '' : ((value === '填入配方/用户指定' ? '' : value) || '')}
@@ -1183,6 +1194,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                     onKeyDown={(e) => e.stopPropagation()}
                     onChange={(e) => {
                       if (greyThisNegative) return;
+                      if (isPositiveCLIP && refineError) setRefineError(null);
                       onUpdateValue(node.id, widget.name, e.target.value);
                     }}
                     placeholder={greyThisNegative ? '该服务商不支持' : (widget.placeholder || '填入配方/用户指定')}

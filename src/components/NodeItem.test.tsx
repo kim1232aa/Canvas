@@ -1,9 +1,15 @@
-import React from 'react';
+/**
+ * @vitest-environment jsdom
+ */
+import React, { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NodeItem } from './NodeItem';
 import { NodeInstance } from '../types/graph';
 import { NODE_DEFINITIONS } from '../constants/nodes';
+
+(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
 function makeVideoNode(
   title: string,
@@ -359,3 +365,96 @@ describe('M115: AIVideoNode model select scope filtering', () => {
     expect(html).toContain('请先选择模型');
   });
 });
+
+describe('M130: NodeItem refine prompt inline error handling', () => {
+  let host: HTMLDivElement | null = null;
+  let root: Root | null = null;
+  let alertMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    localStorage.clear();
+    alertMock = vi.fn();
+    vi.stubGlobal('alert', alertMock);
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+  });
+
+  afterEach(async () => {
+    if (root) await act(async () => { root?.unmount(); });
+    root = null;
+    host?.remove();
+    host = null;
+    vi.unstubAllGlobals();
+    localStorage.clear();
+    document.body.innerHTML = '';
+  });
+
+  function makePositiveCLIPNode(text = 'a cute cat in the garden'): NodeInstance {
+    const def = NODE_DEFINITIONS.CLIPTextEncode;
+    return {
+      id: 'clip-pos-1',
+      type: 'CLIPTextEncode',
+      title: 'CLIP 文本编码器',
+      pos: { x: 0, y: 0 },
+      width: 320,
+      inputs: def.inputs,
+      outputs: def.outputs,
+      state: 'idle',
+      values: {
+        text,
+      },
+    };
+  }
+
+  function mountNode(node: NodeInstance, onUpdateValue = vi.fn()) {
+    return act(async () => {
+      root!.render(
+        <NodeItem
+          node={node}
+          isSelected={false}
+          zoom={1}
+          onSelect={vi.fn()}
+          onStartDrag={vi.fn()}
+          onUpdateValue={onUpdateValue}
+          onDeleteNode={vi.fn()}
+          onToggleCollapse={vi.fn()}
+          onToggleBypass={vi.fn()}
+          onStartConnecting={vi.fn()}
+          onEndConnecting={vi.fn()}
+        />
+      );
+    });
+  }
+
+  it('clicking AI 润色 without a selected model displays inline hint and does NOT call window.alert', async () => {
+    const node = makePositiveCLIPNode('prompt to refine');
+    await mountNode(node);
+
+    const button = Array.from(host!.querySelectorAll('button')).find((b) => b.textContent?.includes('AI 润色优化'));
+    expect(button).toBeDefined();
+    await act(async () => { button!.click(); });
+
+    expect(alertMock).not.toHaveBeenCalled();
+    const errorEl = host!.querySelector('[role="alert"], [data-testid="node-refine-error"]');
+    expect(errorEl?.textContent).toContain('选择润色服务商与模型');
+  });
+
+  it('upstream HTTP error displays status and response body inline and does NOT call window.alert', async () => {
+    const node = makePositiveCLIPNode('prompt to refine');
+    node.values.refineProvider = 'gemini';
+    node.values.refineModel = 'runtime-refine-model';
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('<html>upstream unavailable</html>', { status: 503, statusText: 'Service Unavailable' })));
+
+    await mountNode(node);
+    const button = Array.from(host!.querySelectorAll('button')).find((b) => b.textContent?.includes('AI 润色优化'));
+    expect(button).toBeDefined();
+    await act(async () => { button!.click(); });
+
+    expect(alertMock).not.toHaveBeenCalled();
+    const errorEl = host!.querySelector('[role="alert"], [data-testid="node-refine-error"]');
+    expect(errorEl?.textContent).toContain('HTTP 503');
+    expect(errorEl?.textContent).toContain('<html>upstream unavailable</html>');
+  });
+});
+
