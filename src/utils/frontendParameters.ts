@@ -117,7 +117,7 @@ export function spatialRequestParameters(frame: SpatialFrame): NormalizedGenerat
       clipStrength:l.clipStrength,
       civitaiId:l.civitaiId,
       triggers:l.triggerWords
-    })),
+    }, provider)),
   };
 }
 
