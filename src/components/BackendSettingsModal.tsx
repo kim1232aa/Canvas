@@ -25,6 +25,7 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { ApiKeysState, ProviderConfig, ProviderId } from '../types/providers';
+import { RefineModelPicker } from './ParameterInspector';
 import { fetchProviderKeyStatus, ProviderKeyStatusMap } from '../services/providerKeyStatus';
 import { saveKeysLocalFirst } from '../services/settingsSave';
 import {
@@ -864,6 +865,17 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
 
         {readError && <div role="alert" className="px-6 py-3 bg-rose-950/40 text-rose-200 break-words">读取失败：{readError}</div>}
         {keyStatusError && <div role="alert" data-testid="key-status-error" className="px-6 py-2 bg-rose-950/60 text-rose-200 border-b border-rose-800/40 text-xs font-mono">获取服务端密钥配置状态失败：{keyStatusError}</div>}
+        <div className="px-6 py-3 border-b border-[#242631] bg-[#15161c]">
+          <RefineModelPicker
+            onSelectionChange={(selection) => {
+              setKeys((prev) => ({
+                ...prev,
+                refineProvider: selection.provider || '',
+                refineModel: selection.model || '',
+              }));
+            }}
+          />
+        </div>
         {/* Modal Body */}
         {activeMainTab === 'providers' && (
           <div className="settings-body flex-1 flex min-h-0 overflow-hidden">

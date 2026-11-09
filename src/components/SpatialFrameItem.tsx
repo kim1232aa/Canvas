@@ -16,6 +16,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { FieldStatusBadge } from './FieldStatusBadge';
+import { RefineModelPicker } from './ParameterInspector';
 import { SpatialFrame, ComfyParameters } from '../types/graph';
 import { refinePromptWithGemini, getRefineModelSelection } from '../services/api';
 import { validateModelCompatibility } from '../utils/baseModelMatcher';
@@ -56,6 +57,7 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
   onBranchVariation,
 }) => {
   const [isRefining, setIsRefining] = useState(false);
+  const [refineError, setRefineError] = useState<string | null>(null);
 
   // Soft-3: keep LoRA values when unsupported (grey + omit from payload). Only retitle marketing chrome.
   useEffect(() => {
@@ -72,28 +74,23 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
   const handleRefine = async () => {
     if (!frame.prompt) return;
     const selection = getRefineModelSelection();
-    const provider = (frame.params as any).refineProvider || selection.provider;
-    const model = (frame.params as any).refineModel || selection.model;
+    const provider = selection.provider || (frame.params as any).refineProvider;
+    const model = selection.model || (frame.params as any).refineModel;
+    setRefineError(null);
     if (!provider || !model) {
-      alert('请先选择润色模型');
+      setRefineError('请先在下方选择润色服务商与模型；不会自动切换服务商。');
       return;
     }
     setIsRefining(true);
     try {
-      const refined = await refinePromptWithGemini(
-        frame.prompt,
-        {
-          provider,
-          model,
-          loras: frame.params.loras,
-        }
-      );
-      if (refined) {
-        onUpdateFrame(frame.id, { prompt: refined });
-      }
+      const refined = await refinePromptWithGemini(frame.prompt, { provider, model, loras: frame.params.loras });
+      if (refined) onUpdateFrame(frame.id, { prompt: refined });
     } catch (e: any) {
-      alert(e.message || '润色失败');
-      console.error(e);
+      const status = typeof e?.status === 'number' ? `HTTP ${e.status}` : '';
+      const raw = typeof e?.responseBody === 'string' && e.responseBody.trim()
+        ? e.responseBody
+        : e?.message || '润色失败';
+      setRefineError(`${status ? `润色失败（${status}）` : '润色失败'}：${raw}`);
     } finally {
       setIsRefining(false);
     }
@@ -448,6 +445,23 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
               <span>AI 优化</span>
             </button>
           </div>
+          <RefineModelPicker
+            onSelectionChange={(selection) => {
+              setRefineError(null);
+              onUpdateFrame(frame.id, {
+                params: {
+                  ...frame.params,
+                  refineProvider: selection.provider || '',
+                  refineModel: selection.model || '',
+                } as ComfyParameters,
+              });
+            }}
+          />
+          {refineError && (
+            <div role="alert" data-testid="spatial-refine-error" className="rounded border border-rose-900/60 bg-rose-950/30 p-2 text-[10px] leading-relaxed text-rose-200">
+              <pre className="whitespace-pre-wrap break-all font-mono">{refineError}</pre>
+            </div>
+          )}
           <textarea
             rows={3}
             value={frame.prompt || ''}
