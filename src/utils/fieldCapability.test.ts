@@ -26,8 +26,22 @@ describe('fieldCapability', () => {
     for (const field of ['negative_prompt', 'sampler', 'scheduler']) {
       expect(fieldCapability('fal', 'fal-ai/flux-lora', field, live(falProps, falSchema)), field).toEqual(staticUnsupported);
     }
-    // denoise is neither in FluxLoraInput.properties (open schema) nor in fal-ai/flux-lora static spec -> unknown
+    // FluxLoraInput has no additionalProperties:false: absent fields are unknown absent exact static evidence.
     expect(fieldCapability('fal', 'fal-ai/flux-lora', 'denoise', live(falProps, falSchema))).toEqual(unknown);
+    expect(fieldCapability('fal', 'fal-ai/flux-lora', 'enable_safety_checker', live(falProps, falSchema))).toEqual(supported);
+  });
+
+  it('uses a real open fal OpenAPI schema: prompt/steps alias/safety setting declared, arbitrary missing field unknown', () => {
+    expect(fieldCapability('fal', 'fal-ai/flux-lora', 'prompt', live(falProps, falSchema))).toEqual(supported);
+    expect(fieldCapability('fal', 'fal-ai/flux-lora', 'steps', live(falProps, falSchema))).toEqual(supported);
+    expect(fieldCapability('fal', 'fal-ai/flux-lora', 'enable_safety_checker', live(falProps, falSchema))).toEqual(supported);
+    expect(fieldCapability('fal', 'fal-ai/flux-lora', 'not_in_schema', live(falProps, falSchema))).toEqual(unknown);
+  });
+
+  it('uses an explicit additionalProperties:false schema to prove a missing field unsupported', () => {
+    expect(fieldCapability('wavespeed', 'model', 'steps', { schemaEntry: {
+      status: 'ready', propertiesObj: { prompt: {} }, inputSchema: { type: 'object', properties: { prompt: {} }, additionalProperties: false },
+    } })).toEqual(unsupported);
   });
 
   it('uses the Replicate flux-dev-lora OpenAPI fixture for positive matches and static-spec for unsupported fields', () => {
