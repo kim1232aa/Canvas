@@ -4,7 +4,7 @@
 > 本文档记录经系统审计与真实浏览器核验后的未决业务项。**严正声明**：
 > 1. 表中列为 `PASS_BILLING` 的项，仅证明全参数或部分参数请求真实出站抵达上游服务商、上游欠费/额度不足报错原样透传展示；**欠费响应绝不等于最终 UI 产物验收**，待后续充值后跑出界面可见真实产物并核实参数/LoRA 采用；
 > 2. 避免为旧文档保留「全部已验证」或「开放表只有外部阻塞」等不实结论。系统内部仍存在未证实 LoRA 采用边界、多项视频生成路径及交互组件效果处于**未验证 (Unverified)** 状态（详见第三节）；
-> 3. 证据索引：[docs/evidence/2026-11-05/final.md](docs/evidence/2026-11-05/final.md)、[docs/evidence/2026-11-08/acceptance.md](docs/evidence/2026-11-08/acceptance.md)、[docs/evidence/real-product-2026-11-08/README.md](docs/evidence/real-product-2026-11-08/README.md)。
+> 3. 证据索引：[docs/evidence/2026-11-05/final.md](docs/evidence/2026-11-05/final.md)、[docs/evidence/2026-11-08/acceptance.md](docs/evidence/2026-11-08/acceptance.md)、[docs/evidence/real-product-2026-11-08/README.md](docs/evidence/real-product-2026-11-08/README.md)、[docs/evidence/acceptance-2026-11-09-postfix/README.md](docs/evidence/acceptance-2026-11-09-postfix/README.md)。
 
 ---
 
@@ -38,7 +38,7 @@
 | 6 | **DeepInfra** | `black-forest-labs/FLUX-2-klein-9b` | `HTTP 402: {"detail":{"error":"You need positive balance to do inference. Please add balance manually or setup top-up"}}` | `PASS_BILLING` | 证据 `docs/evidence/2026-11-08/13-real-run...` 与 10/14；实测出站仅含 prompt/model/size 三项参数（steps/seed 为空，无 LoRA），上游欠费错误原样透传展示；需在 DeepInfra 控制台充值后安排满参数与真产物验收 |
 | 7 | **Mage.space** | `mango-v3` | `HTTP 402: {"error":"Payment required"}` | `PASS_BILLING` | 需在 Mage 账户开通 API 点数包 |
 | 8 | **ModelsLab** | `std-modelslab-t2i` + 手填底模 `z-image-turbo` | 上游 `POST https://modelslab.com/api/v6/images/text2img` HTTP 200，业务体 `{"status":"error","message":"You need to be subscribed to a plan to continue, buy subscription from https://modelslab.com/pricing"}`；本站 `/api/engine/modelslab/generate` 以 HTTP 502 原样透传 | `PASS_BILLING` | 证据 `final/17-modelslab-loaded.png` / `18-modelslab-run.png`（M31 真实 UI 点击出站）。需在 ModelsLab 开通付费套餐后再跑真出图 |
-| 9 | **Civitai** | Civitai Wan 2.2 工作流 / Krea 2 Turbo | `HTTP 400: {"code":"insufficientBuzz","message":"User has insufficient buzz to run workflow."}` | `PASS_BILLING` | 需为 Civitai 账号充值 Buzz 积分以执行云端工作流 |
+| 9 | **Civitai** | Civitai Wan 2.2 工作流 / Krea 2 Turbo | `HTTP 400: {"code":"insufficientBuzz","message":"User has insufficient buzz to run workflow."}` | `PASS_BILLING` | 需为 Civitai 账号充值 Buzz 积分以执行云端工作流。**2026-11-09 复验闭环**：M129（`AIVideoNode` 漏发 `sampler`/`scheduler`）与 M130（预设一键「载入并立即运行」残留 `selectedNodeId` 误报）已通过真实 Headless Chrome 点击复验，完整 `actualRequest`（含 `"sampler":"euler"`, `"scheduler":"simple"`, `"allowMatureContent":true`, LoRA）出站并获得上游 400 `insufficientBuzz`，截图索引见 `acceptance-2026-11-09-postfix/`（定性为 `PASS_BILLING`，不伪造视频产物） |
 | 10 | **Novita AI** | `std-novita-t2i` 图像生图 | `HTTP 403: {"code":403,"reason":"NOT_ENOUGH_BALANCE","message":"insufficient balance","metadata":{}}` | `PASS_BILLING` | 图像出站欠费；注：视频分派通过 `EngineRegistry` 的 `SchemaProviderDriver('novita')` 走动态 Schema 路由，不受旧 `videoGenerateRoute` 白名单限制；虽然旧 SVD-XT 预设已标记退役，但当前路由仍可分派 Novita 视频能力；本轮因未执行现代视频模型 UI 点击实测，视频标「未验证」 |
 | 11 | **Venice AI** | `std-venice-t2i` (`venice-sd35`)，非空 CLIP 提示词 | `HTTP 402: {"error":"Insufficient USD or Diem balance to complete request. Visit https://venice.ai/settings/api to add credits."}` | `PASS_BILLING` | 证据 `final/14-venice-run.png`；需在 Venice 设置页充值 USD/Diem |
 | 12 | **Tensor.Art (OpenWorks)** | OpenWorks 工具生图 (`photoreal_studio_z_image`) | M96/M100 已成功生成并持久化真实 1024×1024 PNG 物理产物（`artifact-openworks-bdf77680.png`），但官方工具目录仅声明 4 个位置输入，LoRA/扩展参数是否被上游底层采用未获契约证实（未验证），且截图存在跨运行混杂，完整终验未通过 | `PASS_BILLING` | 仅证实历史点击与产物存在，满参数与 LoRA 真实采用待取得上游契约证据或明确对照核验；视频在 `videoGenerateRoute.ts:366+` 存在调用路径，产物未验证 |

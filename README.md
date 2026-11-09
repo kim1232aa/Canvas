@@ -43,7 +43,7 @@
 
 | 服务商 (Provider) | 图像生成状态 (Image) | 视频生成状态 (Video) | 最近实测日期 | 证据文档索引 | 状态说明与边界 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Civitai** | `PASS_BILLING` | `PASS_BILLING` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 图像与视频工作流请求直达上游，返回 `400 insufficientBuzz` 原样透传；历史出图样本见 `public/verification/` |
+| **Civitai** | `PASS_BILLING` | `PASS_BILLING` | 2026-11-09 | [acceptance-2026-11-09-postfix](docs/evidence/acceptance-2026-11-09-postfix/README.md) | 图像与视频工作流请求直达上游，返回 `400 insufficientBuzz` 原样透传；M129 修复的 `sampler`/`scheduler`、M130 一键载入运行无误报及 M124/M130 AI 润色行内提示均经真实浏览器 UI 点击复验；历史出图样本见 `public/verification/` |
 | **Fal.ai** | `PASS_BILLING` | `PASS_BILLING` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | Krea-2 / Wan 2.2 T2V/I2V LoRA 达真实 Fal 队列，返回 `403 Exhausted balance` |
 | **WaveSpeed** | `PASS_BILLING` | `PASS_BILLING` | 2026-11-08 | [acceptance.md](docs/evidence/2026-11-08/acceptance.md) | 图像与视频请求真实出站至上游，返回 `400 Insufficient credits` 原样透传；因磁盘 `data/` 无产物文件，图像按产物诚实原则标为 `PASS_BILLING`（未完成产物验收） |
 | **Hugging Face** | `PASS_BILLING` | `NOT_SENT` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | Z-Image Turbo 达 HF Inference Router，无多余路由下拉；返回 `402 Purchase pre-paid credits` (`final/06-hf-zimage-run.png`)；视频路由未接通 |
@@ -127,9 +127,10 @@ npx vitest run --maxWorkers=2 --exclude '.tower/**' --exclude '**/node_modules/*
 │   └── routes.ts                  # Worker 端轻量路由分发
 ├── docs/                          # 架构、审计与一手证据归档
 │   ├── evidence/                  # 真实浏览器点击录屏、截图与请求日志
-│   │   └── 2026-11-05/            # 2026-11-05 / 11-07 阶段性全量实测证据
-│   │       ├── final.md           # M25 全量回归终结报告与实机截图索引
-│   │       └── final/             # 41 张独立唯一 MD5 全量高保真实机截图 (*.png)
+│   │   ├── 2026-11-05/            # 2026-11-05 / 11-07 阶段性全量实测证据
+│   │   │   ├── final.md           # M25 全量回归终结报告与实机截图索引
+│   │   │   └── final/             # 41 张独立唯一 MD5 全量高保真实机截图 (*.png)
+│   │   └── acceptance-2026-11-09-postfix/ # M124 / M129 / M130 UI 复验闭环截图与证据 (01~05.png)
 │   └── providers/                 # 供应商协议规格与在线 Schema 说明
 └── src/                           # 前端核心业务源码
     ├── App.tsx                    # 主视图编排、全局状态流、顶栏与弹窗交互
