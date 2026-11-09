@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
 import React, { act } from 'react';
+import { readFileSync } from 'node:fs';
 import { createRoot, type Root } from 'react-dom/client';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SpatialFrameItem } from './SpatialFrameItem';
 import type { ComfyParameters, SpatialFrame } from '../types/graph';
+import { setFieldCapabilitySchemaLookup } from '../utils/fieldCapability';
+import { getModelSchemaEntry } from '../services/modelSchemaCache';
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -134,5 +138,122 @@ describe('SpatialFrameItem prompt refine controls', () => {
 
     expect(host.querySelector('[data-testid="spatial-refine-error"]')?.textContent).toContain('HTTP 503');
     expect(host.querySelector('[data-testid="spatial-refine-error"]')?.textContent).toContain('<html>upstream unavailable</html>');
+  });
+});
+
+describe('M148: SpatialFrameItem fieldCapability integration & transparency', () => {
+  const json = (path: string) => JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));
+  const falFixture = json('../server/fixtures/fal-openapi-fal-ai__flux-lora.json');
+  const falSchema = falFixture.components.schemas.FluxLoraInput;
+  const falProps = falSchema.properties;
+
+  afterEach(() => {
+    setFieldCapabilitySchemaLookup((p, m) => getModelSchemaEntry(p, m));
+  });
+
+  const renderFrameStatic = (frame: SpatialFrame) => {
+    const noop = () => {};
+    return renderToStaticMarkup(
+      <SpatialFrameItem
+        frame={frame}
+        isSelected={false}
+        zoom={1}
+        onSelect={noop}
+        onStartDrag={noop}
+        onUpdateFrame={noop}
+        onDeleteFrame={noop}
+        onQueueFrame={noop}
+        onOpenInspector={noop}
+        onPreviewImage={noop}
+        onBranchVariation={noop}
+      />
+    );
+  };
+
+  it('1. 静态 unsupported: 未填值不渲染 chip，有已有值时显示可见提示且值不被清空', () => {
+    // sampler on fal fal-ai/flux-lora is static unsupported
+    // Case A: empty sampler -> chip not rendered
+    const emptyFrame = makeFrame({
+      params: {
+        checkpoint: 'fal-ai/flux-lora',
+        targetProvider: 'fal',
+        loras: [],
+        sampler: '',
+        scheduler: '',
+        steps: 20,
+        cfg: 7,
+      },
+    });
+    const htmlEmpty = renderFrameStatic(emptyFrame);
+    expect(htmlEmpty).not.toContain('spatial-chip-sampler');
+
+    // Case B: filled sampler ('euler') -> notice visible with field name, value, 本次不发送, static-spec
+    const filledFrame = makeFrame({
+      params: {
+        checkpoint: 'fal-ai/flux-lora',
+        targetProvider: 'fal',
+        loras: [],
+        sampler: 'euler',
+        scheduler: 'normal',
+        steps: 20,
+        cfg: 7,
+      },
+    });
+    const htmlFilled = renderFrameStatic(filledFrame);
+    expect(htmlFilled).toContain('spatial-unsupported-notice-sampler');
+    expect(htmlFilled).toContain('sampler');
+    expect(htmlFilled).toContain('euler');
+    expect(htmlFilled).toContain('本次不发送');
+    expect(htmlFilled).toContain('static-spec');
+    expect(filledFrame.params.sampler).toBe('euler');
+  });
+
+  it('2. fal open schema: 缺字段为 unknown，渲染但带「未确认」标识', () => {
+    setFieldCapabilitySchemaLookup((p, m) => {
+      if (p === 'fal' && m === 'fal-ai/flux-lora') {
+        return {
+          status: 'ready',
+          properties: Object.keys(falProps),
+          propertiesObj: falProps,
+          inputSchema: falSchema,
+        };
+      }
+      return undefined;
+    });
+
+    // In fal open schema without additionalProperties:false, denoise is absent in schema and has no static spec -> unknown
+    const frame = makeFrame({
+      params: {
+        checkpoint: 'fal-ai/flux-lora',
+        targetProvider: 'fal',
+        loras: [],
+        denoise: 0.8,
+        steps: 28,
+        cfg: 3.5,
+      },
+    });
+    const html = renderFrameStatic(frame);
+    expect(html).toContain('未确认');
+    expect(html).toContain('spatial-chip-denoise');
+  });
+
+  it('3. targetProvider==="video" 时解析真实 videoProvider，不能传 "video" 占位当 provider id', () => {
+    let capturedProvider: string | null | undefined = null;
+    setFieldCapabilitySchemaLookup((p, m) => {
+      capturedProvider = p;
+      return undefined;
+    });
+
+    const frame = makeFrame({
+      params: {
+        checkpoint: 'fal-ai/kling-video/v3/standard/image-to-video',
+        targetProvider: 'video',
+        videoProvider: 'fal',
+        loras: [],
+      },
+    });
+    renderFrameStatic(frame);
+    expect(capturedProvider).not.toBe('video');
+    expect(capturedProvider).toBe('fal');
   });
 });
