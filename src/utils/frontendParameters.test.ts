@@ -75,6 +75,31 @@ describe('explicit frontend request contracts', () => {
     const sent=spatialRequestParameters(frame({targetProvider:'fal',loras:[{name:'Display label',civitaiId:'123',modelStrength:0,clipStrength:0,triggerWords:''}]}));
     expect(sent.loras?.[0].path).toBeUndefined();
   });
+  it('keeps path and downloadUrl on a Civitai-sourced AIR LoRA when spatial frame targets a non-Civitai provider, while collapsing to AIR for a Civitai target', () => {
+    const civitaiLora = {
+      name: 'urn:air:flux1:lora:civitai:1351798@1527024',
+      provider: 'civitai',
+      air: 'urn:air:flux1:lora:civitai:1351798@1527024',
+      civitaiId: 'urn:air:flux1:lora:civitai:1351798@1527024',
+      downloadUrl: 'https://civitai.com/api/download/models/1527024',
+      modelStrength: 0.8,
+      clipStrength: 0.8,
+      triggerWords: '',
+    };
+    const falSent = spatialRequestParameters(frame({ targetProvider: 'fal', loras: [civitaiLora] }));
+    expect(falSent.loras?.[0]).toMatchObject({
+      path: 'https://civitai.com/api/download/models/1527024',
+      downloadUrl: 'https://civitai.com/api/download/models/1527024',
+    });
+
+    const civitaiSent = spatialRequestParameters(frame({ targetProvider: 'civitai', loras: [civitaiLora] }));
+    expect(civitaiSent.loras?.[0]).toMatchObject({
+      name: 'urn:air:flux1:lora:civitai:1351798@1527024',
+      civitaiId: 'urn:air:flux1:lora:civitai:1351798@1527024',
+    });
+    expect(civitaiSent.loras?.[0].path).toBeUndefined();
+    expect((civitaiSent.loras?.[0] as any).downloadUrl).toBeUndefined();
+  });
   it('never manufactures a version download URL from a Civitai model identifier', () => {
     expect(resolveLoraPathOrUrl({name:'urn:air:sdxl:lora:civitai:123@456',civitaiId:'123',modelStrength:0,clipStrength:0})).toBe('urn:air:sdxl:lora:civitai:123@456');
   });

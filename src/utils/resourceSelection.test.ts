@@ -1,5 +1,5 @@
 import {describe,it,expect,vi} from 'vitest';
-import {buildCheckpointCandidates, replaceSelectedResource, selectionFromExplicitLoraUrl, selectionFromMetadata,verifyCivitaiSelection} from './resourceSelection';
+import {buildCheckpointCandidates, normalizeLoraPayloadItem, replaceSelectedResource, selectionFromExplicitLoraUrl, selectionFromMetadata,verifyCivitaiSelection} from './resourceSelection';
 import { getRecommendedBaseModelForLora, validateLoraCompatibility } from './baseModelMatcher';
 import { assertExplicitLoraStrengths, MISSING_LORA_STRENGTH_MSG } from './loraStrength';
 import { generationReadiness } from './generationReadiness';
@@ -400,5 +400,30 @@ describe('stored LoRA node fields reach the NodeItem matcher call',()=>{
   expect(noCandidate).toMatchObject({base_model_source:'civitai:baseModel'});
   expect(noCandidate).not.toHaveProperty('checkpoint_candidates');
   expect(matcherView(noCandidate).recommendation).toBeNull();
+ });
+});
+describe('normalizeLoraPayloadItem targetProvider override',()=>{
+ const civitaiItem={
+  name:'urn:air:flux1:lora:civitai:1351798@1527024',
+  provider:'civitai',
+  civitaiId:'urn:air:flux1:lora:civitai:1351798@1527024',
+  downloadUrl:'https://civitai.com/api/download/models/1527024',
+  strength:0.8,
+ };
+ it('keeps path and downloadUrl when targetProvider is a non-Civitai provider even if lora.provider is civitai',()=>{
+  const out=normalizeLoraPayloadItem(civitaiItem,'fal');
+  expect(out).toMatchObject({
+   path:'https://civitai.com/api/download/models/1527024',
+   downloadUrl:'https://civitai.com/api/download/models/1527024',
+  });
+ });
+ it('collapses to AIR civitaiId and strips path/downloadUrl when targetProvider is civitai',()=>{
+  const out=normalizeLoraPayloadItem({...civitaiItem,path:civitaiItem.downloadUrl},'civitai');
+  expect(out).toMatchObject({
+   name:'urn:air:flux1:lora:civitai:1351798@1527024',
+   civitaiId:'urn:air:flux1:lora:civitai:1351798@1527024',
+  });
+  expect((out as any).path).toBeUndefined();
+  expect((out as any).downloadUrl).toBeUndefined();
  });
 });
