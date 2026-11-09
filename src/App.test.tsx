@@ -437,3 +437,98 @@ describe('M108: AIVideoNode and cloud engine recommendation routing', { timeout:
     expect(modelConnection.toNodeId).toBe('ks');
   });
 });
+
+describe('M130: preset load and run clears stale selectedNodeId and initiates run', () => {
+  let host: HTMLDivElement | null = null;
+  let root: Root | null = null;
+
+  beforeEach(() => {
+    localStorage.clear();
+    if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {};
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+  });
+
+  afterEach(async () => {
+    if (root) await act(async () => { root?.unmount(); });
+    root = null;
+    host?.remove();
+    host = null;
+    vi.unstubAllGlobals();
+    localStorage.clear();
+    document.body.innerHTML = '';
+  });
+
+  it('clears stale selectedNodeId when loading preset and does not throw RUN_NODE_DELETED', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes('/api/provider-key-status')) {
+        return new Response(JSON.stringify({ providers: { civitai: { configured: true } } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const oldBoard = {
+      id: 'board-old',
+      name: '旧画布',
+      canvasMode: 'graph',
+      nodes: [
+        {
+          id: 'stale-old-node',
+          type: 'CheckpointLoaderSimple',
+          title: '旧底模',
+          pos: { x: 0, y: 0 },
+          inputs: [],
+          outputs: [],
+          values: { ckpt_name: 'old-ckpt', targetProvider: 'civitai' },
+        },
+      ],
+      connections: [],
+      spatialFrames: [],
+    };
+    localStorage.setItem(BOARDS_KEY, JSON.stringify([oldBoard]));
+    localStorage.setItem(ACTIVE_BOARD_KEY, 'board-old');
+    localStorage.setItem(MODE_KEY, 'graph');
+
+    await act(async () => { root!.render(<App />); });
+
+    // Select the old node
+    const oldNodeEl = host!.querySelector('#node-stale-old-node') as HTMLElement;
+    expect(oldNodeEl).not.toBeNull();
+    await act(async () => { oldNodeEl.click(); });
+
+    // Open Workflow Presets modal
+    const openPresetsBtn = Array.from(host!.querySelectorAll('button')).find(
+      (b) => b.textContent?.trim() === '工作流'
+    ) as HTMLButtonElement;
+    expect(openPresetsBtn).toBeDefined();
+    await act(async () => { openPresetsBtn.click(); });
+
+    // Click "载入并立即运行"
+    const loadAndRunBtn = Array.from(host!.querySelectorAll('button')).find(
+      (b) => b.textContent?.includes('载入并立即运行')
+    ) as HTMLButtonElement;
+    expect(loadAndRunBtn).toBeDefined();
+    await act(async () => { loadAndRunBtn.click(); });
+
+    // Wait for the 150ms delay in handleLoadAndRunPreset
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+
+    // Assert: must NOT display the error "节点已删除，请重新选择"
+    const bodyText = document.body.textContent || '';
+    expect(bodyText).not.toContain('节点已删除，请重新选择');
+    expect(bodyText).not.toContain('未发送请求：节点已删除');
+
+    // And verify that it actually proceeded to key check and initiated generation request
+    const calledUrls = fetchMock.mock.calls.map(([url]) => String(url));
+    expect(calledUrls.some((url) => url.includes('/api/provider-key-status'))).toBe(true);
+    expect(calledUrls.some((url) => url.includes('/api/huggingface') || url.includes('/generate'))).toBe(true);
+  });
+});
+
