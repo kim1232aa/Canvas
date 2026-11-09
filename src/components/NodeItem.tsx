@@ -216,9 +216,9 @@ export const NodeItem: React.FC<NodeItemProps> = ({
   const nodeModel = node.type === 'AIVideoNode'
     ? String(node.values?.model || '').trim()
     : String(node.values?.ckpt_name || currentCheckpoint || '').trim();
-  const fieldCapCtx = React.useMemo(() => ({
+  const fieldCapCtx = {
     customParameters: schemaCustomParameters || (typeof node.values?.custom_parameters === 'string' ? node.values.custom_parameters : undefined),
-  }), [schemaCustomParameters, node.values?.custom_parameters]);
+  };
   const greySeed = isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'seed');
   const greyNegative = isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'negative_prompt');
   const greyWidth = isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'width');
@@ -757,7 +757,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             // (official hf-inference has none of them unless the live schema or a filled canvas value says otherwise).
             if (node.type === 'CheckpointLoaderSimple' && ['resolution', 'shift', 'random_seed', 'gallery_images'].includes(widget.name)
               && String(node.values?.targetProvider || currentProvider || '') === 'huggingface'
-              && !filledCanvasValue(node.values?.[widget.name]) && !(Array.isArray(node.values?.[widget.name]) && node.values[widget.name].length)) return null;
+              && !filledCanvasValue(node.values?.[widget.name]) && !Array.isArray(node.values?.[widget.name])) return null;
             if (node.type === 'CheckpointLoaderSimple' && widget.name === 'shift') {
               const prov = String(node.values?.targetProvider || currentProvider || '');
               const model = node.values?.ckpt_name || currentCheckpoint;
