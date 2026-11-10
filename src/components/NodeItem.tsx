@@ -37,19 +37,30 @@ import { GeminiFieldSelect, GeminiModelBadge } from './GeminiFieldSelect';
 import { fieldOptions, getFieldSpec, resolveSchemaModelId } from '../schemas/providerSchema';
 import { FieldStatusBadge, SchemaSendBadge } from './FieldStatusBadge';
 import { isCanvasFieldUnsupported, isCanvasWidgetUnsupported, LORA_UNSUPPORTED_TITLE, LORA_BYPASS_LABEL, toSchemaProvider } from '../utils/resolveCheckpoint';
-import { readDeclaredSchemaProperties, canvasFieldMatchesSchema } from '../utils/schemaSendHint';
-import { fieldCapability } from '../utils/fieldCapability';
+import { readDeclaredSchemaProperties, canvasFieldMatchesSchema, schemaFieldContext } from '../utils/schemaSendHint';
+import { fieldCapability, type FieldCapability } from '../utils/fieldCapability';
 import { schemaSendStatus } from '../utils/schemaSendStatus';
-/** KSampler + EmptyLatent size widgets: Schema-omit / unsupported → hide empty shells (雁: no blank adjustable boxes). */
+/** Sampler widgets: when the capability judge says unsupported, the empty shell is hidden (雁: no blank adjustable boxes). */
 const SAMPLER_SCHEMA_WIDGETS = new Set(['steps', 'cfg', 'sampler_name', 'scheduler', 'sampler', 'seed', 'denoise', 'control_after_generate']);
-const HIDE_EMPTY_OMIT_WIDGETS = new Set([...SAMPLER_SCHEMA_WIDGETS, 'width', 'height', 'batch_size']);
+const HIDE_EMPTY_OMIT_WIDGETS = new Set(SAMPLER_SCHEMA_WIDGETS);
 const filledCanvasValue = (v: unknown) =>
   v !== undefined && v !== null && !(typeof v === 'string' && v.trim() === '') && !(typeof v === 'number' && Number.isNaN(v)) && !(Array.isArray(v) && v.length === 0);
+/** Only `unsupported` hides, and only while empty; a filled value keeps its 「本次不发送」 notice instead. */
+const hideSamplerShell = (cap: { capability: string }, value: unknown) =>
+  cap.capability === 'unsupported' && !filledCanvasValue(value);
+
+/** Canvas-local controls and selectors are not provider request fields: fieldCapability never judges them (always visible, fillable). */
+const CAPABILITY_EXEMPT_WIDGETS = new Set(['targetProvider', 'ckpt_name', 'civitai_id', 'fal_model_name', 'lora_name', 'filename_prefix']);
+const EMPTY_LATENT_SIZE_WIDGETS = new Set(['width', 'height', 'batch_size']);
+const isCapabilityExempt = (nodeType: string, widgetName: string) =>
+  CAPABILITY_EXEMPT_WIDGETS.has(widgetName) ||
+  (nodeType === 'AIVideoNode' && widgetName === 'model') ||
+  (nodeType === 'CLIPTextEncode' && widgetName === 'text') ||
+  (nodeType === 'EmptyLatentImage' && EMPTY_LATENT_SIZE_WIDGETS.has(widgetName));
 
 function getWidgetCapabilityKey(nodeType: string, widgetName: string): string {
   if (nodeType === 'CLIPTextEncodeNegative' && widgetName === 'text') return 'negative_prompt';
   if (widgetName === 'control_after_generate') return 'seed';
-  if (widgetName === 'batch_size') return 'num_images';
   return widgetName;
 }
 
@@ -216,8 +227,16 @@ export const NodeItem: React.FC<NodeItemProps> = ({
   const nodeModel = node.type === 'AIVideoNode'
     ? String(node.values?.model || '').trim()
     : String(node.values?.ckpt_name || currentCheckpoint || '').trim();
-  const fieldCapCtx = {
-    customParameters: schemaCustomParameters || (typeof node.values?.custom_parameters === 'string' ? node.values.custom_parameters : undefined),
+  const fieldCapCustomParameters = schemaCustomParameters || (typeof node.values?.custom_parameters === 'string' ? node.values.custom_parameters : undefined);
+  // Live schema evidence wins. Otherwise seeded `_canvas.schemaProperties` is only a name list: without `schemaClosed` / `additionalProperties:false`
+  // (JSON Schema default: open) a missing name proves nothing, so it is `unknown` (visible, 未确认) even where a static spec says unsupported.
+  const nodeFieldCapability = (provider: string | undefined, model: string | undefined, field: string): FieldCapability => {
+    const live = fieldCapability(provider, model, field, { customParameters: fieldCapCustomParameters });
+    if (live.source === 'live-schema') return live;
+    const ctx = schemaFieldContext(fieldCapCustomParameters, undefined, { provider, model });
+    const cap = fieldCapability(provider, model, field, ctx);
+    const openSeededList = ctx.schemaEntry?.status === 'ready' && !ctx.schemaEntry.inputSchema;
+    return cap.capability === 'unsupported' && cap.source === 'static-spec' && openSeededList ? { capability: 'unknown', source: 'none' } : cap;
   };
   const greySeed = isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'seed');
   const greyNegative = isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'negative_prompt');
@@ -414,7 +433,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
           {(() => {
             const stepsUnsupported =
               node.type === 'KSampler' &&
-              fieldCapability(currentProvider, currentCheckpoint, 'steps', fieldCapCtx).capability === 'unsupported';
+              nodeFieldCapability(currentProvider, currentCheckpoint, 'steps').capability === 'unsupported';
             const displayTitle =
               node.type === 'KSampler'
                 ? ksamplerNodeTitle(node.title, stepsUnsupported || ['muapi','wavespeed','sogni','krea','together','aimlapi','novita'].includes(currentProvider || ''))
@@ -677,43 +696,31 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             if (widget.name === 'civitai_id' && (node.values.targetProvider || currentProvider || '') !== 'civitai') return null;
             if (widget.name === 'fal_model_name' && !((node.values.targetProvider || currentProvider) === 'fal' && node.values.ckpt_name === 'fal-ai/lora')) return null;
 
-            const isModelSelector = widget.name === 'targetProvider' ||
-              widget.name === 'ckpt_name' ||
-              widget.name === 'civitai_id' ||
-              widget.name === 'fal_model_name' ||
-              widget.name === 'lora_name' ||
-              widget.name === 'filename_prefix' ||
-              (node.type === 'AIVideoNode' && widget.name === 'model') ||
-              (node.type === 'CLIPTextEncode' && widget.name === 'text');
-
             const capKey = getWidgetCapabilityKey(node.type, widget.name);
-            const cap = isModelSelector
+            const cap = isCapabilityExempt(node.type, widget.name)
               ? { capability: 'supported' as const, source: 'none' as const }
-              : fieldCapability(nodeProvider, nodeModel, capKey, fieldCapCtx);
+              : nodeFieldCapability(nodeProvider, nodeModel, capKey);
 
             if (cap.capability === 'unsupported') {
-              if (widget.name === 'control_after_generate') return null;
-              if (filledCanvasValue(value)) {
-                return (
-                  <div
-                    key={widget.name}
-                    data-testid={`unsupported-notice-${widget.name}`}
-                    className="rounded-lg border border-slate-700/60 bg-slate-900/60 p-2 text-[11px] font-mono text-slate-300 space-y-0.5"
-                  >
-                    <div className="flex items-center justify-between text-slate-400">
-                      <span className="font-semibold text-rose-300">{formatWidgetLabel(widget.name, widget.label) || widget.name}</span>
-                      <span className="text-[10px] text-amber-400 font-bold">本次不发送</span>
-                    </div>
-                    <div className="text-slate-300 break-all">
-                      当前值: <span className="text-slate-100 font-semibold">{typeof value === 'object' ? JSON.stringify(value) : String(value)}</span>
-                    </div>
-                    <div className="text-[10px] text-slate-500">
-                      证据来源: <span>{cap.source}</span>
-                    </div>
+              if (widget.name === 'control_after_generate' || hideSamplerShell(cap, value)) return null;
+              return (
+                <div
+                  key={widget.name}
+                  data-testid={`unsupported-notice-${widget.name}`}
+                  className="rounded-lg border border-slate-700/60 bg-slate-900/60 p-2 text-[11px] font-mono text-slate-300 space-y-0.5"
+                >
+                  <div className="flex items-center justify-between text-slate-400">
+                    <span className="font-semibold text-rose-300">{formatWidgetLabel(widget.name, widget.label) || widget.name}</span>
+                    <span className="text-[10px] text-amber-400 font-bold">本次不发送</span>
                   </div>
-                );
-              }
-              return null;
+                  <div className="text-slate-300 break-all">
+                    当前值: <span className="text-slate-100 font-semibold">{typeof value === 'object' ? JSON.stringify(value) : String(value)}</span>
+                  </div>
+                  <div className="text-[10px] text-slate-500">
+                    证据来源: <span>{cap.source}</span>
+                  </div>
+                </div>
+              );
             }
             if (node.type === 'AIVideoNode' && ['duration', 'aspect_ratio', 'num_frames', 'fps', 'seed'].includes(widget.name)) {
               // Live Schema: absent → hide. Seeded schemaProperties (I2V presets): hide fields the endpoint does not declare — no empty shells while Schema is cold.
