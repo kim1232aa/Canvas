@@ -590,5 +590,27 @@ describe('M148: NodeItem fieldCapability widget visibility & transparency', () =
     // Value on node must not be cleared
     expect(node.values.sampler_name).toBe('euler');
   });
-});
 
+  it('6. seeded schemaProperties without closure ⇒ unknown, visible (HF sampler_name) ; schemaClosed:true ⇒ hidden', () => {
+    const seeded = (extra: Record<string, unknown> = {}) => JSON.stringify({ _canvas: { schemaProperties: ['prompt', 'seed'], ...extra } });
+    const render = (cp: string) => {
+      const node = makeKSamplerNode({ sampler_name: '', custom_parameters: cp });
+      return renderToStaticMarkup(
+        <NodeItem node={node} isSelected={false} zoom={1} currentProvider="huggingface" currentCheckpoint="Tongyi-MAI/Z-Image-Turbo" schemaCustomParameters={cp}
+          onSelect={vi.fn()} onStartDrag={vi.fn()} onUpdateValue={vi.fn()} onDeleteNode={vi.fn()} onToggleCollapse={vi.fn()} onToggleBypass={vi.fn()} onStartConnecting={vi.fn()} onEndConnecting={vi.fn()} />,
+      );
+    };
+    const open = render(seeded());
+    expect(open).toContain('widget-label-sampler_name');
+    expect(open).toContain('field-unconfirmed-sampler_name');
+    expect(render(seeded({ schemaClosed: true }))).not.toContain('widget-label-sampler_name');
+  });
+
+  it('7. EmptyLatentImage width/height/batch_size are canvas-local: always visible, never judged', () => {
+    const def = NODE_DEFINITIONS.EmptyLatentImage;
+    const node: NodeInstance = { id: 'lat', type: 'EmptyLatentImage', title: 'Latent', pos: { x: 0, y: 0 }, width: 320, inputs: def.inputs, outputs: def.outputs, values: { batch_size: 1 }, state: 'idle' };
+    const html = renderWithContext(node, 'mage', 'mango-v3');
+    for (const w of ['width', 'height', 'batch_size']) expect(html).toContain(`widget-label-${w}`);
+    expect(html).not.toContain('unsupported-notice-');
+  });
+});
